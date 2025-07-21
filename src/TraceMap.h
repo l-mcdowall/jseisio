@@ -3,8 +3,9 @@
  -------------------
  * The TraceMap class provides mapping support for the JavaSeis.
  * This class maintains a map of the number of traces for each frame in a
- * dataset.  This class reads the fold for an entire volume but only writes
+ * volume.  This class reads the fold for an entire volume but only writes
  * the fold for a single frame.
+ * LIMITATION: not for the entire dataset, only for a volume.
 
  copyright            : (C) 2012 Fraunhofer ITWM
 
@@ -34,6 +35,7 @@
 #include <map>
 #include <utility> // make_pair
 #include <vector>
+using std::vector;
 #include <algorithm>
 
 #include <stdio.h>
@@ -69,6 +71,8 @@ public:
   void closefp();
   long getFrameIndex(const int *position) const;
 
+  vector<int> traceMap;
+
 private:
   bool m_bInit;
 
@@ -88,7 +92,6 @@ private:
   bool m_bSwapByteOrder { }; //true if _byteOrder != nativeOrder()
 
   static const int NOTDEFINDEX = -100;
-  int *m_pTraceMapArray;
 
 private:
   void initTraceMapArray();

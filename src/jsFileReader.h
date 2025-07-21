@@ -55,7 +55,6 @@ class TraceCompressor;
 class CharBuffer;
 class IntBuffer;
 class SeisPEG;
-class TraceMap;
 class catalogedHdrEntry;
 class IOCachedReader;
 class VirtualFolders;
@@ -95,7 +94,7 @@ public:
    */
   int Init(const std::string _jsfilename, const int _NThreads = 1, int wait = 0);
 
-  ///@return true if the dataset is regular, otherwise returns false
+  ///@return true if the dataset is regular, otherwise returns false (unmapped data is always regular)
   bool isRegular() const;
   ///@return true if the dataset is mapped, otherwise returns false
   bool isMapped() const;
@@ -415,19 +414,20 @@ public:
    * @brief Returns the number of virtual folders in dataset
    */
   int getNumOfVirtualFolders() const;
+  const std::vector<int>* getTraceMap() const;
 
   void Close();
 
   void closefp();
 
-  std::string m_filename;
-
 public:
+  std::string m_filename;
   CustomProperties *m_customProps { };
 
 private:
   int m_NThreads { };
 
+  std::vector<int> trcMap;
   TraceProperties *m_traceProps { };
   FileProperties *m_fileProps { };
 
@@ -455,8 +455,6 @@ private:
   unsigned long m_IOBufferSize { };
   IOCachedReader *m_pCachedReaderHD { };
   IOCachedReader *m_pCachedReaderTR { };
-
-  TraceMap *m_trMap { };
 
   VirtualFolders *vFolders { };
   ExtentList *m_TrFileExtents { };

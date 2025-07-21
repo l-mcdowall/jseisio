@@ -91,7 +91,7 @@ public:
   void initGridDim(int numDim);
   int initGridAxis(int _axisInd, std::string axislabel, std::string units, std::string domain, long length, long logicalOrigin,
       long logicalDelta, double physicalOrigin, double physicalDelta);
-  int addProperty(std::string _label, std::string _description, std::string _format, int _count);
+  int addProperty(std::string _label, std::string _description, std::string _format, int _count = 1);
   void addSurveyGeom(int minILine, int maxILine, int minXLine, int maxXLine, double xILine1End, double yILine1End, double xILine1Start,
       double yILine1Start, double xXLine1End, double yXLine1End, int resetOrigin);
   void addSurveyGeom(int minILine, int maxILine, int nIL, int minXLine, int maxXLine, int nXL, double xILine1End, double yILine1End,

@@ -1,11 +1,11 @@
+#include <pthread.h>  //for thread-parallel reading
 #include <stdio.h>
+#include <sys/time.h>
+
 #include <iostream>
 
-#include <sys/timeb.h>
-#include <pthread.h> //for thread-parallel reading 
-
-#include "jsFileReader.h"
 #include "TraceProperties.h"
+#include "jsFileReader.h"
 #include "string.h"
 
 using namespace jsIO;
@@ -25,7 +25,7 @@ typedef struct {
 } thread_parm_t;
 
 static void *uncompress_ThreadStartup(void *_parm) {
-  thread_parm_t *parm = (thread_parm_t *) _parm;
+  thread_parm_t *parm = (thread_parm_t *)_parm;
   jsFileReader *pReader = parm->Object;
   char *rawframe = parm->rawframe;
   int numLiveTraces = parm->numLiveTraces;
@@ -45,11 +45,10 @@ void readTest(const std::string &jsfilename, const std::string &outfilename);
  There are two example functions, one for normal (single threaded) read and the second for multithreaded read.
  */
 int main(int argc, char *argv[]) {
-
   //    std::string jsfilename =  "/m/scratch/supertmp/abel/JavaSeis/data.js";
   std::string jsfilename = "";
   std::string outfname = "";
-  if(argc < 3) {
+  if (argc < 3) {
     printf("Error: please enter input and output file names\n For example: reader ../test.js testOut.b\n");
     exit(-1);
   }
@@ -57,7 +56,7 @@ int main(int argc, char *argv[]) {
   jsfilename.assign(argv[1]);
   outfname.assign(argv[2]);
 
-  //normal read test
+  // normal read test
   readTest(jsfilename, outfname);
 
   //  multithreded read test
@@ -70,7 +69,7 @@ int main(int argc, char *argv[]) {
 void readTest(const std::string &jsfilename, const std::string &outfilename) {
   jsFileReader jsTest;
   int ierr = jsTest.Init(jsfilename);
-  if(ierr != 1) {
+  if (ierr != 1) {
     printf("Error in JavaSeis file %s\n", jsfilename.c_str());
     exit(-1);
   }
@@ -78,7 +77,7 @@ void readTest(const std::string &jsfilename, const std::string &outfilename) {
   // version
   printf("Version: %s\n", jsTest.getVersion().c_str());
 
-  //Custom property
+  // Custom property
   printf("Stacked: %s\n", jsTest.getCustomProperty("Stacked").c_str());
   //    printf("sourceType: %s\n",jsTest.getCustomProperty("FieldInstruments/sourceType").c_str());
 
@@ -135,22 +134,22 @@ void readTest(const std::string &jsfilename, const std::string &outfilename) {
   std::ofstream outfile(outfilename.c_str(), std::ifstream::out);
   printf("outfile : %s\n", outfilename.c_str());
 
-  timeb time0, time1;
-  ftime(&time0);
+  timeval time0, time1;
+  gettimeofday(&time0, NULL);
 
-  for(int i = 0; i < 5/*numFrames*/; i++) {
+  for (int i = 0; i < 5 /*numFrames*/; i++) {
     nTracesRead = jsTest.readFrame(i, gather, headerBuf);
     //        nTracesRead = jsTest.readFrame(i, gather);
-    if(nTracesRead < 0) {
+    if (nTracesRead < 0) {
       printf("Error while trying to read frame #%d\n", i);
       break;
     }
     printf("Number of live traces in frame = %d\n", nTracesRead);
     // write the gather outfile
-    outfile.write((char *) gather, nSamples * nTracesRead * sizeof(float));
+    outfile.write((char *)gather, nSamples * nTracesRead * sizeof(float));
 
-    //print some header info
-    for(int j = 0; j < nTracesRead; j++) {
+    // print some header info
+    for (int j = 0; j < nTracesRead; j++) {
       sou_x = hdrSouX.getDoubleVal(&headerBuf[j * traceheaderSize]);
       sou_y = hdrSouY.getDoubleVal(&headerBuf[j * traceheaderSize]);
       rec_x = hdrRecX.getDoubleVal(&headerBuf[j * traceheaderSize]);
@@ -160,17 +159,16 @@ void readTest(const std::string &jsfilename, const std::string &outfilename) {
       iType = hdrType.getIntVal(&headerBuf[j * traceheaderSize]);
       fOffset = hdrOffset.getFloatVal(&headerBuf[j * traceheaderSize]);
 
-      printf(
-        "\t%d: \tSOU_X=%3.2f, SOU_Y=%3.2f, REC_X=%3.2f, REC_Y=%3.2f, ILINE_NO=%d, XLINE_NO=%d, Offset=%g, Type=%d\n",
-        j, sou_x, sou_y, rec_x, rec_y, il, xl, fOffset, iType);
+      printf("\t%d: \tSOU_X=%3.2f, SOU_Y=%3.2f, REC_X=%3.2f, REC_Y=%3.2f, ILINE_NO=%d, XLINE_NO=%d, Offset=%g, Type=%d\n", j, sou_x, sou_y,
+             rec_x, rec_y, il, xl, fOffset, iType);
     }
 
     nTracesTotal += nTracesRead;
   }
   printf("Read %ld traces\n", nTracesTotal);
 
-  ftime(&time1);
-  double total = (time1.time - time0.time) + (time1.millitm - time0.millitm) / 1.e3;
+  gettimeofday(&time1, NULL);
+  double total = (time1.tv_sec - time0.tv_sec) + (time1.tv_usec - time0.tv_usec) / 1.e6;
   std::cout << "\n read time: " << total << " (sec)\n\n";
 
   outfile.close();
@@ -185,7 +183,7 @@ void readMultiThreaded(const std::string &jsfilename, const int NThreads, const 
 
   jsFileReader jsTest;
   int ierr = jsTest.Init(jsfilename, NThreads);
-  if(ierr != 1) {
+  if (ierr != 1) {
     printf("Error in JavaSeis file %s\n", jsfilename.c_str());
     exit(-1);
   }
@@ -206,13 +204,13 @@ void readMultiThreaded(const std::string &jsfilename, const int NThreads, const 
   std::ofstream outfile(outfilename.c_str(), std::ifstream::out);
   printf("outfile : %s\n", outfilename.c_str());
 
-  timeb time0, time1;
-  ftime(&time0);
+  struct timeval time0, time1;
+  gettimeofday(&time0, NULL);
 
   pthread_t thread[NThreads];
   int rc[NThreads];
   thread_parm_t *parm[NThreads];
-  for(int ithread = 0; ithread < NThreads; ithread++) {
+  for (int ithread = 0; ithread < NThreads; ithread++) {
     parm[ithread] = new thread_parm_t;
   }
   int *pLiveTraces = new int[NThreads];
@@ -221,15 +219,15 @@ void readMultiThreaded(const std::string &jsfilename, const int NThreads, const 
   bool berr = false;
   int numFrameToRead = NThreads;
   int i = 0;
-  while(i < numFrames) {
-    numFrameToRead = (NThreads < numFrames - i) ? NThreads : numFrames - i; //min of NThreads and the number of the rest frames
+  while (i < numFrames) {
+    numFrameToRead = (NThreads < numFrames - i) ? NThreads : numFrames - i;  // min of NThreads and the number of the rest frames
 
     int ires = jsTest.readRawFrames(i, numFrameToRead, rawframes, pLiveTraces);
-    if(ires != JS_OK) {
+    if (ires != JS_OK) {
       printf("Error while trying to read frame #%d\n", i);
       break;
     }
-    for(int ith = 0; ith < numFrameToRead; ith++) {
+    for (int ith = 0; ith < numFrameToRead; ith++) {
       nTracesTotal += pLiveTraces[ith];
       parm[ith]->Object = &jsTest;
       parm[ith]->rawframe = &rawframes[frameSizeOnDisk * ith];
@@ -239,38 +237,39 @@ void readMultiThreaded(const std::string &jsfilename, const int NThreads, const 
       parm[ith]->active = true;
       parm[ith]->tid = ith;
       pos += pLiveTraces[ith] * nSamples;
-      rc[ith] = pthread_create(&thread[ith], NULL, uncompress_ThreadStartup, (void *) parm[ith]);
-      if(rc[ith]) printf("Failed to create a thread.\n");
+      rc[ith] = pthread_create(&thread[ith], NULL, uncompress_ThreadStartup, (void *)parm[ith]);
+      if (rc[ith]) printf("Failed to create a thread.\n");
     }
 
     {
-      //join threads
+      // join threads
       berr = false;
-      for(int ith = 0; ith < numFrameToRead; ith++) {
+      for (int ith = 0; ith < numFrameToRead; ith++) {
         //                 printf("ith=%d\n",ith);
         rc[ith] = pthread_join(thread[ith], NULL);
-        if(rc[ith]) {
+        if (rc[ith]) {
           printf("Failed to join to  thread , rc=%d\n", rc[ith]);
         }
         int ires = parm[ith]->retval;
-        if(ires < 0) {
+        if (ires < 0) {
           berr = true;
         }
       }
-      if(berr) {
+      if (berr) {
         printf("********* Error during uncompression\n");
         break;
       }
     }
 
-    outfile.write((char *) gather, pos * sizeof(float));
+    outfile.write((char *)gather, pos * sizeof(float));
     pos = 0;
     i += numFrameToRead;
   }
 
-  ftime(&time1);
-  double total = (time1.time - time0.time) + (time1.millitm - time0.millitm) / 1.e3;
-  std::cout << "\n read time: " << total << " (sec)\n\n";
+  gettimeofday(&time1, NULL);
+  // Calculate elapsed time
+  double elapsedTime = (time1.tv_sec - time0.tv_sec) + (time1.tv_usec - time0.tv_usec) / 1000000.0;
+  printf("Elapsed time: %f seconds\n", elapsedTime);
 
   printf("nTracesTotal=%ld\n", nTracesTotal);
 
@@ -289,7 +288,7 @@ void printDataInfo(const jsFileReader &jsTest) {
   jsTest.getAxisLabels(labels);
   jsTest.getAxisUnits(units);
 
-  for(int i = 0; i < dim; i++) {
+  for (int i = 0; i < dim; i++) {
     lengths[i] = jsTest.getAxisPhysicalValues(i, physicalValues[i]);
     lengths[i] = jsTest.getAxisLogicalValues(i, logicalValues[i]);
   }
@@ -298,34 +297,34 @@ void printDataInfo(const jsFileReader &jsTest) {
   printf("\n\nParadigm Reader Properties:\n");
   printf("------------------------------------------\n");
 
-  printf("DsNuserLabel=%s\n", jsTest.getDescriptiveName().c_str());   //Descriptive Name
-  printf("DsNsampleEncoding=%s\n", jsTest.getTraceFormatName().c_str());  //Data Encoding Format
-  printf("DsNwordByteOrder=%s\n", jsTest.getByteOrderAsString().c_str());       //Byte Order
+  printf("DsNuserLabel=%s\n", jsTest.getDescriptiveName().c_str());        // Descriptive Name
+  printf("DsNsampleEncoding=%s\n", jsTest.getTraceFormatName().c_str());   // Data Encoding Format
+  printf("DsNwordByteOrder=%s\n", jsTest.getByteOrderAsString().c_str());  // Byte Order
   printf("\tDaNisRegular=%s\n\n", jsTest.isRegular() ? "TRUE" : "FALSE");
   printf("DsNaxisOrder =");
-  for(int i = 0; i < dim; i++) {
+  for (int i = 0; i < dim; i++) {
     printf(" %s", labels[i].c_str());
   }
   printf("\n");
-  for(int i = 0; i < dim; i++) {
+  for (int i = 0; i < dim; i++) {
     printf("Dimension %i\n", i);
-    printf("\tDaNDataType=%s,\n", labels[i].c_str());    //Axis label
-    printf("\tDaNpgUnit=%s\n", units[i].c_str());     //Units
-    printf("\tDaNaxisNumMax=%d\n", jsTest.getAxisLen(i)); //Max length
-    printf("\tDaNaxisFirst=%4.2f\n", physicalValues[i][0]);                        //Minimum physical axis value
-    printf("\tDaNaxisLast =%4.2f\n", physicalValues[i][lengths[i] - 1]);             //Maximum physical axis value
-    printf("\tDaNaxisStep =%4.2f\n\n", physicalValues[i][1] - physicalValues[i][0]); //Physical axis delta (needs calculating)
+    printf("\tDaNDataType=%s,\n", labels[i].c_str());                                 // Axis label
+    printf("\tDaNpgUnit=%s\n", units[i].c_str());                                     // Units
+    printf("\tDaNaxisNumMax=%d\n", jsTest.getAxisLen(i));                             // Max length
+    printf("\tDaNaxisFirst=%4.2f\n", physicalValues[i][0]);                           // Minimum physical axis value
+    printf("\tDaNaxisLast =%4.2f\n", physicalValues[i][lengths[i] - 1]);              // Maximum physical axis value
+    printf("\tDaNaxisStep =%4.2f\n\n", physicalValues[i][1] - physicalValues[i][0]);  // Physical axis delta (needs calculating)
 
-    printf("\tDaNaxisNumFirst=%ld\n", logicalValues[i][0]);            //Minimum logical axis value
-    printf("\tDaNaxisNumStep =%ld\n", logicalValues[i][1] - logicalValues[i][0]); //Logical axis delta (needs calculating)
+    printf("\tDaNaxisNumFirst=%ld\n", logicalValues[i][0]);                        // Minimum logical axis value
+    printf("\tDaNaxisNumStep =%ld\n", logicalValues[i][1] - logicalValues[i][0]);  // Logical axis delta (needs calculating)
     printf("\n");
   }
 
   printf("Sample Values\n");
-  printf("\tDaNDataType=%s,\n", labels[0].c_str());     //Axis label
-  printf("\tDaNpgUnit  =%s\n", units[0].c_str());      //Units
-  printf("\tDaNminVal  =%4.2f\n", physicalValues[0][0]);            //Minimum physical axis value
-  printf("\tDaNmaxVal  =%4.2f\n", physicalValues[0][lengths[0] - 1]); //Maximum physical axis value
+  printf("\tDaNDataType=%s,\n", labels[0].c_str());                    // Axis label
+  printf("\tDaNpgUnit  =%s\n", units[0].c_str());                      // Units
+  printf("\tDaNminVal  =%4.2f\n", physicalValues[0][0]);               // Minimum physical axis value
+  printf("\tDaNmaxVal  =%4.2f\n", physicalValues[0][lengths[0] - 1]);  // Maximum physical axis value
   printf("\n");
 
   printf("------------------------------------------\n\n");

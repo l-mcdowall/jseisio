@@ -283,7 +283,7 @@ int ExtentList::InitFromXML(const std::string &jsDataPath, std::string ExtentMan
     ExtentListEntry exEntry;
     extNames.clear();
     int ires = vFolders[0].loadExtents(extBaseName, extNames);
-    if(ires != JS_OK) {
+    if(ires != JS_OK || extNames.empty()) {
       return JS_USERERROR;
     }
     std::string path = vFolders[0].getPath() + '/' + extNames[0];

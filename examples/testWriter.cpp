@@ -1,21 +1,21 @@
-/** @example reader.cpp
+/** @example writer.cpp
  * A description of the example file, causes the example file to show up in Examples
  * test multi thread read write cases with new code using OpenMP.
  *
  * -Wl,-no-undefined -std=c++11  -fopenmp -fPIC -g -O3 -ffast-math -msse4.2  -Wno-unused -ftree-vectorize -fopt-info-vec  -Wall
  */
 
+#include <omp.h>
 #include <stdio.h>
+#include <sys/time.h>
+
 #include <fstream>
 #include <vector>
 
-#include "jsFileWriter.h"
-#include "jsWriterInput.h"
 #include "catalogedHdrEntry.h"
 #include "jsFileReader.h"
-
-#include <sys/timeb.h>
-#include <omp.h>
+#include "jsFileWriter.h"
+#include "jsWriterInput.h"
 
 using namespace jsIO;
 
@@ -23,7 +23,6 @@ using namespace jsIO;
 #define LOG4CPLUS_DISABLE_TRACE
 
 void updating(jsIO::jsFileWriter *jsWrtTest, int seed) {
-
   int dim = jsWrtTest->getNDim();
   int NSamples = jsWrtTest->getAxisLen(0);
   int NOffsets = jsWrtTest->getAxisLen(1);
@@ -36,24 +35,24 @@ void updating(jsIO::jsFileWriter *jsWrtTest, int seed) {
   int inl0 = jsWrtTest->getAxisLogicalOrigin(3);
   int dinl = jsWrtTest->getAxisLogicalOrigin(4);
 
-  // mulit thread replace/update the values
-  #pragma omp parallel num_threads(4)
+// mulit thread replace/update the values
+#pragma omp parallel num_threads(4)
   {
-    float *frame = jsWrtTest->allocFrameBuf(); // Get directly from data context
-    //i.e. allocate frame with new float[NSamples*NOffsets];
-    //the user have to call delete[] afterwards
+    float *frame = jsWrtTest->allocFrameBuf();  // Get directly from data context
+    // i.e. allocate frame with new float[NSamples*NOffsets];
+    // the user have to call delete[] afterwards
 
     char *hdbuf = jsWrtTest->allocHdrBuf(
-                    true); //alloc buffer (with new[] command) and init with SeisSpace standard values.(parameter initVals=true)
-    //the user have to call delete[] afterwards
+        true);  // alloc buffer (with new[] command) and init with SeisSpace standard values.(parameter initVals=true)
+    // the user have to call delete[] afterwards
     int trc_type = 1;
     int t0 = 0;
 
     // jsWrtTest.writeTrace(0,frame);
 
-    //Initalize headers and write frames (data and headers)
+    // Initalize headers and write frames (data and headers)
 
-    //get access to header-words
+    // get access to header-words
     jsIO::catalogedHdrEntry itrcTypeHdr = jsWrtTest->getHdrEntry("TRC_TYPE");
     jsIO::catalogedHdrEntry iTimeHdr = jsWrtTest->getHdrEntry("TIME");
     jsIO::catalogedHdrEntry fOffsetHdr = jsWrtTest->getHdrEntry("OFFSET");
@@ -65,14 +64,16 @@ void updating(jsIO::jsFileWriter *jsWrtTest, int seed) {
 
     int traceheaderSize = jsWrtTest->getTraceHeaderSize();
 
-    #pragma omp for
-    for(int iInline = 0; iInline < NInlines; iInline++) {
+#pragma omp for
+    for (int iInline = 0; iInline < NInlines; iInline++) {
       //   printf("iInline=%d\n",iInline);
-      for(int iXline = 2; iXline < NXlines; iXline++) {
+      for (int iXline = 2; iXline < NXlines; iXline++) {
         //       printf("\t \t iXline=%d\n", iXline);
-        for(int iTraces = 0; iTraces < NOffsets; iTraces++) {
-          if(iInline % 2 == 0 && iXline % 2 == 0 && iTraces % 2 == 0) trc_type = 12;  //test non-full frames
-          else trc_type = 1;
+        for (int iTraces = 0; iTraces < NOffsets; iTraces++) {
+          if (iInline % 2 == 0 && iXline % 2 == 0 && iTraces % 2 == 0)
+            trc_type = 12;  // test non-full frames
+          else
+            trc_type = 1;
           itrcTypeHdr.setIntVal(&hdbuf[iTraces * traceheaderSize], trc_type);
           iTimeHdr.setIntVal(&hdbuf[iTraces * traceheaderSize], t0);
           fOffsetHdr.setFloatVal(&hdbuf[iTraces * traceheaderSize], off0 + iTraces * doff);
@@ -83,15 +84,15 @@ void updating(jsIO::jsFileWriter *jsWrtTest, int seed) {
           iXLineHdr.setIntVal(&hdbuf[iTraces * traceheaderSize], iXline);
 
           // init frame with synth values
-          if(trc_type == 1) for(int j = 0; j < NSamples; j++)
-              frame[iTraces * NSamples + j] = seed + j + (iInline * NXlines + iXline) * NOffsets + iTraces;
+          if (trc_type == 1)
+            for (int j = 0; j < NSamples; j++) frame[iTraces * NSamples + j] = seed + j + (iInline * NXlines + iXline) * NOffsets + iTraces;
         }
 
         int numLiveTraces = jsWrtTest->leftJustify(frame, hdbuf, NOffsets);
         long frameInd = iInline * NXlines + iXline;
         int ires1 = jsWrtTest->writeFrame(frameInd, frame, hdbuf, numLiveTraces);
         //         ires = jsWrtTest.writeFrame(frameInd,frame, NULL, numLiveTraces);
-        if(ires1 != numLiveTraces) {
+        if (ires1 != numLiveTraces) {
           printf("Error while writing frame # %ld\n", frameInd);
           iXline = NXlines;
           iInline = NInlines;
@@ -100,16 +101,14 @@ void updating(jsIO::jsFileWriter *jsWrtTest, int seed) {
       }
     }
 
-    delete[] hdbuf;  //was allocated with jsWrtTest.allocHdrBuf()
-    delete[] frame;  //was allocated with jsWrtTest.allocFrameBuf()
-
+    delete[] hdbuf;  // was allocated with jsWrtTest.allocHdrBuf()
+    delete[] frame;  // was allocated with jsWrtTest.allocFrameBuf()
   }
 }
 
 int writeTestMultipleHdrs(const std::string &jsfilename) {
-
-  timeb time0, time1;
-  ftime(&time0);
+  struct timeval time0, time1;
+  gettimeofday(&time0, NULL);
 
   // Framework definition
   int numDim = 3;
@@ -148,9 +147,9 @@ int writeTestMultipleHdrs(const std::string &jsfilename) {
   int ires = jsWrtTest.writeMetaData();
   printf("write binary data...\n");
 
-  float *frame = jsWrtTest.allocFrameBuf(); // Get directly from data context
-  char *hdbuf = jsWrtTest.allocHdrBuf(
-                  true); //alloc buffer (with new[] command) and init with SeisSpace standard values.(parameter initVals=true)
+  float *frame = jsWrtTest.allocFrameBuf();  // Get directly from data context
+  char *hdbuf =
+      jsWrtTest.allocHdrBuf(true);  // alloc buffer (with new[] command) and init with SeisSpace standard values.(parameter initVals=true)
   int traceheaderSize = jsWrtTest.getTraceHeaderSize();
 
   std::vector<short> shrtvec;
@@ -159,15 +158,14 @@ int writeTestMultipleHdrs(const std::string &jsfilename) {
   std::vector<float> floatvec;
   std::vector<double> doublevec;
 
-  for(int iTraces = 0; iTraces < NXlines; iTraces++) {
-    shrtvec.push_back((short) iTraces);
-    intvec.push_back((int) iTraces);
-    longvec.push_back((long) iTraces);
+  for (int iTraces = 0; iTraces < NXlines; iTraces++) {
+    shrtvec.push_back((short)iTraces);
+    intvec.push_back((int)iTraces);
+    longvec.push_back((long)iTraces);
     floatvec.push_back(iTraces * 0.3333f);
     doublevec.push_back(iTraces * 0.3333);
 
-    for(int j = 0; j < NSamples; j++)
-      frame[iTraces * NSamples + j] = iTraces + j;
+    for (int j = 0; j < NSamples; j++) frame[iTraces * NSamples + j] = iTraces + j;
     jsWrtTest.getHdrEntry("TRC_TYPE").setIntVal(&hdbuf[iTraces * traceheaderSize], 1);
     jsWrtTest.getHdrEntry("XLINE").setIntVal(&hdbuf[iTraces * traceheaderSize], iTraces);
     jsWrtTest.getHdrEntry("ILINE").setIntVal(&hdbuf[iTraces * traceheaderSize], 1);
@@ -185,63 +183,56 @@ int writeTestMultipleHdrs(const std::string &jsfilename) {
 
   jsFileReader jsReadTest;
   int ierr = jsReadTest.Init(jsfilename);
-  frame = jsReadTest.allocFrameBuf(); // Get directly from data context
-  hdbuf = jsReadTest.allocHdrBuf(true); //alloc buffer (with new[] command) and init with SeisSpace standard values.(parameter initVals=true)
+  frame = jsReadTest.allocFrameBuf();  // Get directly from data context
+  hdbuf =
+      jsReadTest.allocHdrBuf(true);  // alloc buffer (with new[] command) and init with SeisSpace standard values.(parameter initVals=true)
   traceheaderSize = jsReadTest.getNumBytesInHeader();
   int nTracesRead = jsReadTest.readFrame(1, frame, hdbuf);
 
-  for(int iTraces = 0; iTraces < NXlines; iTraces++) {
+  for (int iTraces = 0; iTraces < NXlines; iTraces++) {
     intvec = jsReadTest.getHdrEntry("TRC_TYPE").getIntVector(&hdbuf[iTraces * traceheaderSize]);
     int len = intvec.size();
-    for(int i = 0; i < len; i++)
-      printf(": %d ", intvec[i]);
+    for (int i = 0; i < len; i++) printf(": %d ", intvec[i]);
     printf(" total trc_type %d \n", len);
     intvec = jsReadTest.getHdrEntry("XLINE").getIntVector(&hdbuf[iTraces * traceheaderSize]);
     len = intvec.size();
-    for(int i = 0; i < len; i++)
-      printf(": %d ", intvec[i]);
+    for (int i = 0; i < len; i++) printf(": %d ", intvec[i]);
     printf(" total xline %d \n", len);
 
     intvec = jsReadTest.getHdrEntry("ILINE").getIntVector(&hdbuf[iTraces * traceheaderSize]);
     len = intvec.size();
-    for(int i = 0; i < len; i++)
-      printf(": %d ", intvec[i]);
+    for (int i = 0; i < len; i++) printf(": %d ", intvec[i]);
     printf(" total iline %d \n", len);
 
     shrtvec = jsReadTest.getHdrEntry("HDRSHTS").getShortVector(&hdbuf[iTraces * traceheaderSize]);
     len = shrtvec.size();
-    for(int i = 0; i < len; i++)
-      printf(": %d ", shrtvec[i]);
+    for (int i = 0; i < len; i++) printf(": %d ", shrtvec[i]);
     printf(" total short hdrs %d \n", len);
 
     intvec = jsReadTest.getHdrEntry("HDRINTS").getIntVector(&hdbuf[iTraces * traceheaderSize]);
     len = intvec.size();
-    for(int i = 0; i < len; i++)
-      printf(": %d ", intvec[i]);
+    for (int i = 0; i < len; i++) printf(": %d ", intvec[i]);
     printf(" total int hdrs %d \n", len);
 
     longvec = jsReadTest.getHdrEntry("HDRLONGS").getLongVector(&hdbuf[iTraces * traceheaderSize]);
     len = longvec.size();
-    for(int i = 0; i < len; i++)
-      printf(": %ld ", longvec[i]);
+    for (int i = 0; i < len; i++) printf(": %ld ", longvec[i]);
     printf(" total long hdrs %d \n", len);
 
     floatvec = jsReadTest.getHdrEntry("HDRFLTS").getFloatVector(&hdbuf[iTraces * traceheaderSize]);
     len = floatvec.size();
-    for(int i = 0; i < len; i++)
-      printf(": %f ", floatvec[i]);
+    for (int i = 0; i < len; i++) printf(": %f ", floatvec[i]);
     printf(" total float hdrs %d \n", len);
 
     doublevec = jsReadTest.getHdrEntry("HDRDBLS").getDoubleVector(&hdbuf[iTraces * traceheaderSize]);
     len = doublevec.size();
-    for(int i = 0; i < len; i++)
-      printf(": %lf ", doublevec[i]);
+    for (int i = 0; i < len; i++) printf(": %lf ", doublevec[i]);
     printf(" total double %d \n", len);
   }
 
-  ftime(&time1);
-  double total = (time1.time - time0.time) + (time1.millitm - time0.millitm) / 1.e3;
-  std::cout << "\n Write time: " << total << " (sec)\n\n";
+  gettimeofday(&time1, NULL);
+  double elapsedTime = (time1.tv_sec - time0.tv_sec) + (time1.tv_usec - time0.tv_usec) / 1000000.0;
+  std::cout << "\n Write time: " << elapsedTime << " (sec)\n\n";
 
   return 0;
 }
@@ -250,7 +241,7 @@ int readVerifyTest(const std::string &jsfilename, int value) {
   // open file
   jsFileReader jsReadTest;
   int ierr = jsReadTest.Init(jsfilename);
-  if(ierr != 1) {
+  if (ierr != 1) {
     printf("Error in JavaSeis file %s\n", jsfilename.c_str());
     exit(-1);
   }
@@ -259,9 +250,9 @@ int readVerifyTest(const std::string &jsfilename, int value) {
   //   printf("Version: %s\n",jsReadTest.getVersion().c_str());
   printf("Description : %s\n", jsReadTest.getDescriptiveName().c_str());
 
-  //Custom property
-  //   printf("Stacked: %s\n",jsReadTest.getCustomProperty("Stacked").c_str());
-  //    printf("sourceType: %s\n",jsTest.getCustomProperty("FieldInstruments/sourceType").c_str());
+  // Custom property
+  //    printf("Stacked: %s\n",jsReadTest.getCustomProperty("Stacked").c_str());
+  //     printf("sourceType: %s\n",jsTest.getCustomProperty("FieldInstruments/sourceType").c_str());
 
   long Ntr = jsReadTest.getNtr();
   printf("Total number of traces in %s is %ld\n", jsfilename.c_str(), Ntr);
@@ -275,26 +266,24 @@ int readVerifyTest(const std::string &jsfilename, int value) {
   int nTraces = jsReadTest.getAxisLen(1);
   int nframes = dim > 2 ? jsReadTest.getAxisLen(2) : 0;
   int nvolumes = dim > 3 ? jsReadTest.getAxisLen(3) : 0;
-  printf("nDim=%d, nSamples=%d, nTracesInFrame=%d, nFrameInVolume=%d, nVolumeInHypercube=%d, numFrames=%ld, \n", dim,
-         nSamples, nTraces, nframes, nvolumes, numFrames);
+  printf("nDim=%d, nSamples=%d, nTracesInFrame=%d, nFrameInVolume=%d, nVolumeInHypercube=%d, numFrames=%ld, \n", dim, nSamples, nTraces,
+         nframes, nvolumes, numFrames);
 
   std::vector<std::string> axis;
   jsReadTest.getAxisLabels(axis);
-  for(int i = 0; i < dim; i++)
-    printf("Axis %d  %s\n", i + 1, axis[i].c_str());
+  for (int i = 0; i < dim; i++) printf("Axis %d  %s\n", i + 1, axis[i].c_str());
 
   // 1 way to get all header name
   std::vector<std::string> hdrEs;
   int N = jsReadTest.getHdrEntries(hdrEs);
-  for(int i = 0; i < N; i++) {
+  for (int i = 0; i < N; i++) {
     printf("Header %d  %s \n", i + 1, hdrEs[i].c_str());
   }
 
   // another way to using catalogedHdrEntry
   N = jsReadTest.getNumHeaderWords();
-  std::vector<jsIO::catalogedHdrEntry, std::allocator<jsIO::catalogedHdrEntry> > hdrEntries =
-    jsReadTest.getHdrEntries();
-  for(int i = 0; i < N; i++) {
+  std::vector<jsIO::catalogedHdrEntry, std::allocator<jsIO::catalogedHdrEntry> > hdrEntries = jsReadTest.getHdrEntries();
+  for (int i = 0; i < N; i++) {
     printf("Header %d  %s  offset=%d \n", i + 1, hdrEntries[i].getName().c_str(), hdrEntries[i].getOffset());
   }
   catalogedHdrEntry hdrSouX = jsReadTest.getHdrEntry("CDP_XD");
@@ -314,31 +303,31 @@ int readVerifyTest(const std::string &jsfilename, int value) {
   int traceheaderSize = jsReadTest.getNumBytesInHeader();
   int frameheaderSize = nTraces * traceheaderSize;
 
-  timeb time0, time1;
-  ftime(&time0);
+  struct timeval time0, time1;
+  gettimeofday(&time0, NULL);
 
-  #pragma omp parallel num_threads(3)
+#pragma omp parallel num_threads(3)
   {
     jsFileReader jsReadTestTh;
     jsReadTestTh.Init(jsfilename);
     char *headerBuf = new char[frameheaderSize];
     float *gather = new float[frameLen];
 
-    for(int i = omp_get_thread_num(); i < numFrames; i += omp_get_num_threads()) {
+    for (int i = omp_get_thread_num(); i < numFrames; i += omp_get_num_threads()) {
       printf("Frame number=%d\n", i);
       int nTracesRead = jsReadTestTh.readFrame(i, gather, headerBuf);
-      if(nTracesRead < 0) {
+      if (nTracesRead < 0) {
         printf("Error while trying to read frame #%d\n", i);
         break;
       }
       printf("Number of live traces in frame = %d\n", nTracesRead);
 
-      //print some header info
+      // print some header info
       float sou_x, sou_y, rec_x, rec_y;
       float fOffset;
       int il, xl, ofb;
       int iType;
-      for(int j = 0; j < nTracesRead; j++) {
+      for (int j = 0; j < nTracesRead; j++) {
         sou_x = jsReadTestTh.getDoubleHdrVal("CDP_XD", &headerBuf[j * traceheaderSize]);
         sou_x = jsReadTestTh.getDoubleHdrVal("CDP_XD", &headerBuf[j * traceheaderSize]);
         sou_y = jsReadTestTh.getDoubleHdrVal("CDP_YD", &headerBuf[j * traceheaderSize]);
@@ -350,11 +339,11 @@ int readVerifyTest(const std::string &jsfilename, int value) {
         fOffset = jsReadTestTh.getFloatHdrVal("OFFSET", &headerBuf[j * traceheaderSize]);
         ofb = jsReadTestTh.getIntHdrVal("OFB_NO", &headerBuf[j * traceheaderSize]);
 
-        //printf("\t%d: \tSOU_X=%3.2f, SOU_Y=%3.2f, REC_X=%3.2f, REC_Y=%3.2f, ILINE_NO=%d, XLINE_NO=%d, Offset=%g, Type=%d\n",
-        //           j, sou_x, sou_y, rec_x, rec_y, il, xl, fOffset, iType);
+        // printf("\t%d: \tSOU_X=%3.2f, SOU_Y=%3.2f, REC_X=%3.2f, REC_Y=%3.2f, ILINE_NO=%d, XLINE_NO=%d, Offset=%g, Type=%d\n",
+        //            j, sou_x, sou_y, rec_x, rec_y, il, xl, fOffset, iType);
 
-        for(int k = 0; k < nSamples; k++)
-          if(gather[j * nSamples + k] != k + (il * nframes + xl) * nTraces + ofb + value) {
+        for (int k = 0; k < nSamples; k++)
+          if (gather[j * nSamples + k] != k + (il * nframes + xl) * nTraces + ofb + value) {
             printf("Error trace data #%d\n", k);
             exit(-1);
           };
@@ -368,17 +357,17 @@ int readVerifyTest(const std::string &jsfilename, int value) {
 
   printf("Read %ld traces and verified!\n", nTracesTotal);
 
-  ftime(&time1);
-  double total = (time1.time - time0.time) + (time1.millitm - time0.millitm) / 1.e3;
+  gettimeofday(&time1, NULL);
+  double total = (time1.tv_sec - time0.tv_sec) + (time1.tv_usec - time0.tv_usec) / 1000000.0;
+
   std::cout << "\n read time: " << total << " (sec)\n\n";
 
   return 0;
 }
 
 int writeTestbyWriter(const std::string &jsfilename) {
-
-  timeb time0, time1;
-  ftime(&time0);
+  struct timeval time0, time1;
+  gettimeofday(&time0, NULL);
 
   // Framework definition
   int numDim = 4;
@@ -406,20 +395,20 @@ int writeTestbyWriter(const std::string &jsfilename) {
   //    wrtInput.setNumberOfExtents(3);
   //   wrtInput.add_secondary_path("/m/scratch/supertmp/abel/JavaSeis/VFtestsSec1/l1/l2/jsFile/");
   //   wrtInput.add_secondary_path("/m/scratch/supertmp/abel/JavaSeis/VFtestsSec2/l1/l2/jsFile/");
-  //  wrtInput.initData(jsIO::DataType::CUSTOM, jsIO::DataFormat::FLOAT, jsIO::JSIO_LITTLEENDIAN);//DataFormat::FLOAT, COMPRESSED_INT16, SEISPEG
-  //  wrtInput.initData(jsIO::DataType::CUSTOM, jsIO::DataFormat::COMPRESSED_INT16, jsIO::JSIO_LITTLEENDIAN);//DataFormat::FLOAT, COMPRESSED_INT16, SEISPEG
-  //  wrtInput.initData(jsIO::DataType::CUSTOM, jsIO::DataFormat::SEISPEG, jsIO::JSIO_LITTLEENDIAN);//DataFormat::FLOAT, COMPRESSED_INT16, SEISPEG
-  //  wrtInput.setSeispegPolicy(1);//0 = FASTEST, 1 = MAX_COMPRESSION
-  //  wrtInput.initGridDim(numDim);
-  //  wrtInput.initGridAxis(0, jsIO::AxisLabel::TIME, jsIO::Units::SECONDS,jsIO::DataDomain::TIME, NSamples, 0, 1, 0, 4);
-  //  wrtInput.initGridAxis(1, jsIO::AxisLabel::OFFSET_BIN, jsIO::Units::M,jsIO::DataDomain::SPACE, NOffsets, 0, 1, off0, doff);
-  //  wrtInput.initGridAxis(2, jsIO::AxisLabel::CROSSLINE, jsIO::Units::M,jsIO::DataDomain::SPACE, NXlines, 0, 1, xl0, dxl);
-  //  wrtInput.initGridAxis(3, jsIO::AxisLabel::INLINE, jsIO::Units::M,jsIO::DataDomain::SPACE, NInlines, 0, 1, inl0, dinl);
+  //  wrtInput.initData(jsIO::DataType::CUSTOM, jsIO::DataFormat::FLOAT, jsIO::JSIO_LITTLEENDIAN);//DataFormat::FLOAT, COMPRESSED_INT16,
+  //  SEISPEG wrtInput.initData(jsIO::DataType::CUSTOM, jsIO::DataFormat::COMPRESSED_INT16, jsIO::JSIO_LITTLEENDIAN);//DataFormat::FLOAT,
+  //  COMPRESSED_INT16, SEISPEG wrtInput.initData(jsIO::DataType::CUSTOM, jsIO::DataFormat::SEISPEG,
+  //  jsIO::JSIO_LITTLEENDIAN);//DataFormat::FLOAT, COMPRESSED_INT16, SEISPEG wrtInput.setSeispegPolicy(1);//0 = FASTEST, 1 =
+  //  MAX_COMPRESSION wrtInput.initGridDim(numDim); wrtInput.initGridAxis(0, jsIO::AxisLabel::TIME,
+  //  jsIO::Units::SECONDS,jsIO::DataDomain::TIME, NSamples, 0, 1, 0, 4); wrtInput.initGridAxis(1, jsIO::AxisLabel::OFFSET_BIN,
+  //  jsIO::Units::M,jsIO::DataDomain::SPACE, NOffsets, 0, 1, off0, doff); wrtInput.initGridAxis(2, jsIO::AxisLabel::CROSSLINE,
+  //  jsIO::Units::M,jsIO::DataDomain::SPACE, NXlines, 0, 1, xl0, dxl); wrtInput.initGridAxis(3, jsIO::AxisLabel::INLINE,
+  //  jsIO::Units::M,jsIO::DataDomain::SPACE, NInlines, 0, 1, inl0, dinl);
   //       Add properties/header-words
   //  wrtInput.addDefaultProperties();
   //  wrtInput.addProperty("NEW_HDR", "Header description", "INTEGER", 1);
   //      Initalize jsFileWriter object with the defined data context wrtInput
-  //Add geometry
+  // Add geometry
   //  wrtInput.addSurveyGeom(1,2,2,3,4,2,5.5,6.6,7.7,8.8,9.9,10.10);
   //  wrtInput.addCustomProperty("Stacked", "boolen", "false");
   //  int ires = jsWrtTest.Init(&wrtInput);
@@ -448,7 +437,7 @@ int writeTestbyWriter(const std::string &jsfilename) {
   // ------------------------------------------------------
   printf("write meta data (xml)...\n");
   int ires = jsWrtTest.writeMetaData();
-  if(ires != JS_OK) {
+  if (ires != JS_OK) {
     printf("Error writing meta data!\n");
     return 0;
   }
@@ -461,21 +450,22 @@ int writeTestbyWriter(const std::string &jsfilename) {
 
   printf("write binary data done!\n");
 
-  ftime(&time1);
-  double total = (time1.time - time0.time) + (time1.millitm - time0.millitm) / 1.e3;
+  gettimeofday(&time1, NULL);
+  double total = (time1.tv_sec - time0.tv_sec) + (time1.tv_usec - time0.tv_usec) / 1000000.0;
+
   std::cout << "\n Write time: " << total << " (sec)\n\n";
 
   return 0;
 }
 
 int writeTestbyCopy(const std::string &injsfilename, const std::string &outjsfilename, int update) {
-  timeb time0, time1;
-  ftime(&time0);
+  struct timeval time0, time1;
+  gettimeofday(&time0, NULL);
 
   jsFileReader jsReadTest;
 
   int ierr = jsReadTest.Init(injsfilename);
-  if(ierr != 1) {
+  if (ierr != 1) {
     printf("Error in JavaSeis file %s\n", injsfilename.c_str());
     exit(-1);
   }
@@ -488,7 +478,7 @@ int writeTestbyCopy(const std::string &injsfilename, const std::string &outjsfil
   jsReadTest.Close();
   printf("write meta data and copy data done!\n");
 
-  if(!update) return 0;
+  if (!update) return 0;
 
   printf("update binary data...\n");
 
@@ -496,21 +486,21 @@ int writeTestbyCopy(const std::string &injsfilename, const std::string &outjsfil
 
   printf("write binary data done!\n");
 
-  ftime(&time1);
-  double total = (time1.time - time0.time) + (time1.millitm - time0.millitm) / 1.e3;
+  gettimeofday(&time1, NULL);
+  double total = (time1.tv_sec - time0.tv_sec) + (time1.tv_usec - time0.tv_usec) / 1000000.0;
   std::cout << "\n Write time: " << total << " (sec)\n\n";
 
   return 0;
 }
 
 int writeTestbyUpdate(const std::string &injsfilename) {
-  timeb time0, time1;
-  ftime(&time0);
+  struct timeval time0, time1;
+  gettimeofday(&time0, NULL);
 
   jsFileReader jsReadTest;
 
   int ierr = jsReadTest.Init(injsfilename);
-  if(ierr != 1) {
+  if (ierr != 1) {
     printf("Error in JavaSeis file %s\n", injsfilename.c_str());
     exit(-1);
   }
@@ -521,9 +511,9 @@ int writeTestbyUpdate(const std::string &injsfilename) {
   jsWrtTest.Initialize();
   jsReadTest.Close();
 
-  //printf("write meta data (xml), and copy data ...\n");
-  //int ires = jsWrtTest.writeMetaData(2);
-  //printf("write meta data and copy data done!\n");
+  // printf("write meta data (xml), and copy data ...\n");
+  // int ires = jsWrtTest.writeMetaData(2);
+  // printf("write meta data and copy data done!\n");
 
   // if (!update) return 0;
 
@@ -532,21 +522,22 @@ int writeTestbyUpdate(const std::string &injsfilename) {
   updating(&jsWrtTest, 100);
 
   printf("write binary data done!\n");
-  ftime(&time1);
-  double total = (time1.time - time0.time) + (time1.millitm - time0.millitm) / 1.e3;
+  gettimeofday(&time1, NULL);
+  double total = (time1.tv_sec - time0.tv_sec) + (time1.tv_usec - time0.tv_usec) / 1000000.0;
+
   std::cout << "\n Write time: " << total << " (sec)\n\n";
 
   return 0;
 }
 
 int writeTestbyCopyHeader(const std::string &injsfilename, const std::string &outjsfilename) {
-  timeb time0, time1;
-  ftime(&time0);
+  struct timeval time0, time1;
+  gettimeofday(&time0, NULL);
 
   jsFileReader jsReadTest;
 
   int ierr = jsReadTest.Init(injsfilename);
-  if(ierr != 1) {
+  if (ierr != 1) {
     printf("Error in JavaSeis file %s\n", injsfilename.c_str());
     exit(-1);
   }
@@ -580,23 +571,23 @@ int writeTestbyCopyHeader(const std::string &injsfilename, const std::string &ou
 
   // need update 3D axis because it might be decimated, not same as reader
   jsWrtTest.updateGridAxis(1, NOffsets, 1, NOffsets, off0, doff);
-  jsWrtTest.updateGridAxis(2, NXlines, xl0, dxl, jsReadTest.getAxisPhysicalOrigin(2),
-                           jsReadTest.getAxisPhysicalDelta(2));
+  jsWrtTest.updateGridAxis(2, NXlines, xl0, dxl, jsReadTest.getAxisPhysicalOrigin(2), jsReadTest.getAxisPhysicalDelta(2));
   // create a new dataset on disk
   printf("output length : (%d,%d,%d,%d) \n", NSamples, NOffsets, NXlines, NInlines);
   jsWrtTest.writeMetaData();
 
   printf("Create only 1 volume out of %d \n", NInlines);
-  int frame_offset = 0; //13*2
-  for(int i = 0; i < NXlines; i++) {
+  int frame_offset = 0;  // 13*2
+  for (int i = 0; i < NXlines; i++) {
     int numLiveTraces = jsReadTest.readFrame(2 * i + frame_offset, gather, headerBuf);
-    if(numLiveTraces > 0) numLiveTraces = jsWrtTest.leftJustify(gather, headerBuf, numLiveTraces);
+    if (numLiveTraces > 0) numLiveTraces = jsWrtTest.leftJustify(gather, headerBuf, numLiveTraces);
     int ires1 = jsWrtTest.writeFrame(i, gather, headerBuf, numLiveTraces);
   }
 
   printf("write binary data done!\n");
-  ftime(&time1);
-  double total = (time1.time - time0.time) + (time1.millitm - time0.millitm) / 1.e3;
+  gettimeofday(&time1, NULL);
+  double total = (time1.tv_sec - time0.tv_sec) + (time1.tv_usec - time0.tv_usec) / 1000000.0;
+
   std::cout << "\n Write time: " << total << " (sec)\n\n";
 
   return 0;

@@ -33,10 +33,6 @@ DECLARE_LOGGER(TraceMapLog);
 
 TraceMap::~TraceMap() {
   m_bInit = false;
-  if(m_pTraceMapArray != NULL) {
-    delete[] m_pTraceMapArray;
-    m_pTraceMapArray = NULL;
-  }
   if(m_pAxisLengths != NULL) {
     delete[] m_pAxisLengths;
     m_pAxisLengths = NULL;
@@ -45,7 +41,6 @@ TraceMap::~TraceMap() {
 }
 
 TraceMap::TraceMap() {
-  m_pTraceMapArray = NULL;
   m_pAxisLengths = NULL;
   m_nCurrentVolIndex = -1;
   m_nReadCacheHit = 0;
@@ -63,7 +58,6 @@ TraceMap::TraceMap() {
  * @param mode r - read, w - write
  */
 TraceMap::TraceMap(long *_axisLengths, int _numAxis, JS_BYTEORDER _byteOrder, std::string path, std::string mode) {
-  m_pTraceMapArray = NULL;
   m_pAxisLengths = NULL;
   m_nCurrentVolIndex = -1;
   Init(_axisLengths, _numAxis, _byteOrder, path, mode);
@@ -95,7 +89,7 @@ int TraceMap::Init(long *_axisLengths, int _numAxis, JS_BYTEORDER _byteOrder, st
 
   //     TRACE_PRINTF(TraceMapLog, "m_numAxis=%d, m_numFrames=%ld\n", m_numAxis,m_numFrames);
 
-  m_pTraceMapArray = new int[m_numFrames];
+  traceMap.resize(m_numFrames, 0);
 
   //     std::transform(mode.begin(), mode.end(), mode.begin(), ::tolower);
   StrToLower(mode);
@@ -159,7 +153,7 @@ int TraceMap::getFold(int frameIndex) {
   // This will load the fold for the entire volume
   loadVolume(frameIndex);
   int pos = frameIndex - (int)(frameIndex / m_numFrames) * m_numFrames;
-  return (m_pTraceMapArray[pos]);
+  return (traceMap[pos]);
 }
 
 /*
@@ -181,7 +175,7 @@ int TraceMap::putFold(long glbframeIndex, int numTraces) {
   // insert the fold value into the array
   long oldMapFilePosition = glbframeIndex * sizeof(int);
   int posloc = glbframeIndex - (int)(glbframeIndex / m_numFrames) * m_numFrames;
-  m_pTraceMapArray[posloc] = numTraces;
+  traceMap[posloc] = numTraces;
   //    m_mapIO.seekp(oldMapFilePosition);
   //    long newMapFilePosition = m_mapIO.tellp();
   //    if (newMapFilePosition != oldMapFilePosition) {
@@ -214,7 +208,7 @@ void TraceMap::putFold(int *position, int *fold) {
 
   // insert the fold value into the array
   for(int i = 0; i < m_numFrames; i++)
-    m_pTraceMapArray[i] = fold[i];
+    traceMap[i] = fold[i];
 
   writeVolume();
 }
@@ -224,7 +218,7 @@ void TraceMap::putFold(int *position, int *fold) {
  */
 void TraceMap::initTraceMapArray() {
   for(int i = 0; i < m_numFrames; i++)
-    m_pTraceMapArray[i] = NOTDEFINDEX;
+    traceMap[i] = NOTDEFINDEX;
 }
 
 /**
@@ -236,7 +230,7 @@ void TraceMap::initTraceMapArray() {
  */
 void TraceMap::intializeTraceMapOnDisk() {
   for(int frameIndex = 0; frameIndex < m_numFrames; frameIndex++) {
-    m_pTraceMapArray[frameIndex] = 0;
+    traceMap[frameIndex] = 0;
   }
 
   int totalNumVols = 1;
@@ -244,13 +238,11 @@ void TraceMap::intializeTraceMapOnDisk() {
     totalNumVols *= m_pAxisLengths[i];
 
   //    m_mapIO.seekp(std::ios_base::beg);
-  if(m_bSwapByteOrder) endian_swap((void*)m_pTraceMapArray, m_numFrames, sizeof(int));
+  if(m_bSwapByteOrder) endian_swap(&traceMap[0], m_numFrames, sizeof(int));
 
   for(int i = 0; i < totalNumVols; i++) {
-    //      m_mapIO.write((const char*)m_pTraceMapArray,m_numFrames*sizeof(int));
     long oldMapFilePosition = i * m_numFrames * sizeof(int);
-    // ::pwrite(m_mapfd, (const void *)m_pTraceMapArray, m_numFrames*sizeof(int), oldMapFilePosition );
-    wrapIOFull(pwrite, m_mapfd, (void*)m_pTraceMapArray, m_numFrames * sizeof(int), oldMapFilePosition);
+    wrapIOFull(pwrite, m_mapfd, &traceMap[0], m_numFrames * sizeof(int), oldMapFilePosition);
   }
   ::fsync(m_mapfd);
   //    m_mapIO.flush();
@@ -269,16 +261,7 @@ int TraceMap::writeFrame(int frameIndex) {
 
   long oldMapFilePosition = sizeof(int) * (m_pAxisLengths[GridDefinition::FRAME_INDEX] * m_nVolumeIndex + frameIndex);
 
-  //m_mapIO.seekp(oldMapFilePosition);
-  //long newMapFilePosition = m_mapIO.tellp();
-  //if (newMapFilePosition != oldMapFilePosition) {
-  //  ERROR_PRINTF(TraceMapLog, "Unable to seek to file offset %lu",oldMapFilePosition);
-  //  return JS_USERERROR;
-  //}
-  //m_mapIO.write((const char*)&m_pTraceMapArray[frameIndex], sizeof(int));
-
-  //    m_mapIO.write((const char*)&numTraces,sizeof(int));
-  int numTraces = m_pTraceMapArray[frameIndex];
+  int numTraces = traceMap[frameIndex];
   if(m_bSwapByteOrder) endian_swap((void*)&numTraces, 1, sizeof(int));
   // if( ::pwrite(m_mapfd, (const void *)&numTraces, sizeof(int), oldMapFilePosition ) != sizeof(int) )
   if(wrapIOFull(pwrite, m_mapfd, (void*)&numTraces, sizeof(int), oldMapFilePosition) != sizeof(int)) {
@@ -297,15 +280,13 @@ int TraceMap::writeFrame(int frameIndex) {
 void TraceMap::writeVolume() {
   checkVolumeIndex();
   long oldMapFilePosition = m_nCurrentVolIndex * m_numFrames * sizeof(int);
-  if(m_bSwapByteOrder) endian_swap((void*)m_pTraceMapArray, m_numFrames, sizeof(int));
+  if(m_bSwapByteOrder) endian_swap(&traceMap[0], m_numFrames, sizeof(int));
 
-  // ::pwrite(m_mapfd, (const void *)m_pTraceMapArray, m_numFrames*sizeof(int), oldMapFilePosition );
-  wrapIOFull(pwrite, m_mapfd, (void*)m_pTraceMapArray, m_numFrames * sizeof(int), oldMapFilePosition);
+  // ::pwrite(m_mapfd, (const void *)traceMap, m_numFrames*sizeof(int), oldMapFilePosition );
+  wrapIOFull(pwrite, m_mapfd, &traceMap[0], m_numFrames * sizeof(int), oldMapFilePosition);
   ::fsync(m_mapfd);
 
-  if(m_bSwapByteOrder) endian_swap((void*)m_pTraceMapArray, m_numFrames, sizeof(int));
-
-  // m_mapIO.write((const char*)m_pTraceMapArray, m_numFrames*sizeof(int));
+  if(m_bSwapByteOrder) endian_swap(&traceMap[0], m_numFrames, sizeof(int));
 }
 
 /*
@@ -323,19 +304,11 @@ int TraceMap::loadVolume(int frameIndex) {
     m_nReadCounter++;
     long oldMapFilePosition = volIndex * m_numFrames * sizeof(int);  //getVolumeOffset(frameIndex);
 
-    //m_mapIO.seekg(oldMapFilePosition);
-    //long newMapFilePosition = m_mapIO.tellg();
-    //if (newMapFilePosition != oldMapFilePosition) {
-    //  ERROR_PRINTF(TraceMapLog, "Unable to seek to file offset %lu",oldMapFilePosition);
-    //  return JS_USERERROR;
-    //}
-    // m_mapIO.read((char*)m_pTraceMapArray, m_numFrames*sizeof(int));
-    // if( ::pread(m_mapfd, (void *)m_pTraceMapArray, m_numFrames*sizeof(int), oldMapFilePosition) != m_numFrames*sizeof(int))
-    if(wrapIOFull(pread, m_mapfd, (void*)m_pTraceMapArray, m_numFrames * sizeof(int), oldMapFilePosition) != m_numFrames * sizeof(int)) {
+    if(wrapIOFull(pread, m_mapfd, &traceMap[0], m_numFrames * sizeof(int), oldMapFilePosition) != m_numFrames * sizeof(int)) {
       // No data present. (This happens during initilization)
       initTraceMapArray();
     } else {
-      if(m_bSwapByteOrder) endian_swap((void*)m_pTraceMapArray, m_numFrames, sizeof(int));
+      if(m_bSwapByteOrder) endian_swap(&traceMap[0], m_numFrames, sizeof(int));
     }
   }
   m_nCurrentVolIndex = volIndex;
@@ -361,11 +334,6 @@ long TraceMap::getFrameIndex(const int *position) const {
   return frIndex;
 }
 
-/** Return the tracemap for the current volume */
-const int* TraceMap::getTraceMapArray() const {
-  return (const int*)m_pTraceMapArray;
-}
-
 /**
  * Asserts that all trace map values have been initialized (i.e. > 0). Used
  * for testing.
@@ -373,8 +341,8 @@ const int* TraceMap::getTraceMapArray() const {
 int TraceMap::assertAllValuesInitialized() {
 
   for(int frameIndex = 0; frameIndex < m_numFrames; frameIndex++) {
-    if(m_pTraceMapArray[frameIndex] < 1) {
-      ERROR_PRINTF(TraceMapLog, "Invalid trace map value (%d) found at frame index %d", m_pTraceMapArray[frameIndex], frameIndex);
+    if(traceMap[frameIndex] < 1) {
+      ERROR_PRINTF(TraceMapLog, "Invalid trace map value (%d) found at frame index %d", traceMap[frameIndex], frameIndex);
       return JS_USERERROR;
     }
   }

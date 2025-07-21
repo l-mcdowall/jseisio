@@ -93,8 +93,8 @@ public:
 
   void addDefaultProperties();
   int addProperty(std::string _label);
-  int addProperty(std::string _label, std::string _description, std::string _format, int _count);
-  int addProperty(std::string _label, std::string _description, int _format, int _count);
+  int addProperty(std::string _label, std::string _description, std::string _format, int _count = 1);
+  int addProperty(std::string _label, std::string _description, int _format, int _count = 1);
 
   int load(std::string &XMLstring);
   int save(std::string &XMLstring);

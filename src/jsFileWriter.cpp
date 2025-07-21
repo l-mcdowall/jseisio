@@ -328,7 +328,7 @@ int jsFileWriter::Initialize() {
   }
 
   m_fileProps->comments = "www.javaseis.org - JavaSeis File Properties " + JS_VERSION;
-  m_fileProps->version = "2006.3";
+  m_fileProps->version = "2025.7";
   m_fileProps->byteOrder = nativeOrder();
   m_byteOrder = m_fileProps->byteOrder;
 
@@ -640,9 +640,8 @@ int jsFileWriter::writeTraceBuffer(long offset, char *buf, long buflen) {
       return JS_WARNING;
     }
 
-    // printf("buflen=%ld,rest_buflen=%ld,bytes2write=%ld,file_offset=%ld\n", buflen, rest_buflen, bytes2write, loc_offset_trFile);
+    // printf("fd=%d,buflen=%ld,rest_buflen=%ld,bytes2write=%ld,file_offset=%ld\n", curr_trffd, buflen, rest_buflen, bytes2write, loc_offset_trFile);
     bytes2write = std::min(bytes2write, rest_buflen);
-    // long bytesWritten = ::pwrite(curr_trffd, &buf[buflen - rest_buflen], bytes2write, loc_offset_trFile);
     long bytesWritten = wrapIOFull(pwrite, curr_trffd, &buf[buflen - rest_buflen], bytes2write, loc_offset_trFile);
     // printf("extInd=%d, curr_trffd=%d, rest_buflen=%ld, loc_offset_trFile=%lu, bytesWritten=%ld, bytes2write=%ld\n",extInd,curr_trffd,rest_buflen,loc_offset_trFile, bytesWritten, bytes2write);
     ::fsync(curr_trffd);
@@ -761,11 +760,13 @@ long jsFileWriter::getFrameIndex(int *posLogical) { // *input position must be i
   int pos[5] = { 0, 0, 0, 0, 0 }; //max dim to determine frameIndex (since max dim=5)
   for(int i = 0; i < numAxis; i++) {
     pos[i] = (int)((posLogical[i] - m_fileProps->logicalOrigins[i]) / m_fileProps->logicalDeltas[i]);
+//    printf("%d->%d ", posLogical[i], pos[i]);
     if(pos[i] < 0 || pos[i] > m_fileProps->axisLengths[i]) {
       ERROR_PRINTF(jsFileWriterLog, "Unable to locate a frame with value %d in dimension %d", posLogical[i], i);
       return -1;
     }
   }
+//  printf("\n");
 
   long frIndex = pos[2];
   for(int i = 3; i < numAxis; i++) {

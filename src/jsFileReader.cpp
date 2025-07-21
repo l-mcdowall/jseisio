@@ -21,36 +21,35 @@
 
  ***************************************************************************/
 
-#include <limits>
-#include <errno.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
 #include "jsFileReader.h"
-#include "GridDefinition.h"
-#include "TraceProperties.h"
-#include "PropertyDescription.h"
-#include "FileProperties.h"
+
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#include <limits>
+
+#include "Assertion.h"
 #include "CustomProperties.h"
-#include "TraceMap.h"
-#include "compress/TraceCompressor.h"
-#include "compress/SeisPEG.h"
-
-#include "IOCachedReader.h"
-
-#include "PSProLogging.h"
 #include "ExtentList.h"
-#include "jseisUtil.h"
+#include "FileProperties.h"
 #include "FileUtil.h"
+#include "GridDefinition.h"
+#include "IOCachedReader.h"
+#include "PSProLogging.h"
+#include "PropertyDescription.h"
+#include "TraceMap.h"
+#include "TraceProperties.h"
+#include "compress/SeisPEG.h"
+#include "compress/TraceCompressor.h"
+#include "jseisUtil.h"
 
 namespace jsIO {
 DECLARE_LOGGER(jsFileReaderLog);
 
-jsFileReader::~jsFileReader() {
-  Close();
-}
+jsFileReader::~jsFileReader() { Close(); }
 
 jsFileReader::jsFileReader(const unsigned long _bufferSize) {
   m_curr_trffd = -1;
@@ -61,93 +60,88 @@ jsFileReader::jsFileReader(const unsigned long _bufferSize) {
 }
 
 void jsFileReader::closefp() {
-  if(m_trMap != NULL) {
-    m_trMap->closefp();
-    delete m_trMap;
-    m_trMap = NULL;
-  }
-  if(m_curr_trffd > 0) {
+  if (m_curr_trffd > 0) {
     ::close(m_curr_trffd);
     m_curr_trffd = -1;
   }
-  if(m_curr_trhfd > 0) {
+  if (m_curr_trhfd > 0) {
     ::close(m_curr_trhfd);
     m_curr_trhfd = -1;
   }
 }
 
 void jsFileReader::Close() {
-  if(m_traceBufferArray != NULL) {
+  if (m_traceBufferArray != NULL) {
     delete[] m_traceBufferArray;
     m_traceBufferArray = NULL;
   }
-  if(m_traceBuffer != NULL) {
+  if (m_traceBuffer != NULL) {
     delete[] m_traceBuffer;
     m_traceBuffer = NULL;
   }
-  if(m_headerBufferArray != NULL) {
+  if (m_headerBufferArray != NULL) {
     delete[] m_headerBufferArray;
     m_headerBufferArray = NULL;
   }
-  if(m_headerBuffer != NULL) {
+  if (m_headerBuffer != NULL) {
     delete[] m_headerBuffer;
     m_headerBuffer = NULL;
   }
-  if(m_headerBufferView != NULL) {
+  if (m_headerBufferView != NULL) {
     delete[] m_headerBufferView;
     m_headerBufferView = NULL;
   }
-  if(m_traceProps != NULL) {
+  if (m_traceProps != NULL) {
     delete m_traceProps;
     m_traceProps = NULL;
   }
-  if(m_customProps != NULL) {
+  if (m_customProps != NULL) {
     delete m_customProps;
     m_customProps = NULL;
   }
-  if(m_fileProps != NULL) {
+  if (m_fileProps != NULL) {
     delete m_fileProps;
     m_fileProps = NULL;
   }
-  if(m_TrFileExtents != NULL) {
+  if (m_TrFileExtents != NULL) {
     delete m_TrFileExtents;
     m_TrFileExtents = NULL;
   }
-  if(m_TrHeadExtents != NULL) {
+  if (m_TrHeadExtents != NULL) {
     delete m_TrHeadExtents;
     m_TrHeadExtents = NULL;
   }
 
-  if(m_traceCompressor != NULL) {
+  if (m_traceCompressor != NULL) {
     delete[] m_traceCompressor;
     m_traceCompressor = NULL;
   }
-  if(m_seispegCompressor != NULL) {
+  if (m_seispegCompressor != NULL) {
     delete[] m_seispegCompressor;
     m_seispegCompressor = NULL;
   }
 
-  if(m_frame != NULL) {
+  if (m_frame != NULL) {
     delete[] m_frame;
     m_frame = NULL;
   }
-  if(m_frameHeader != NULL) {
+  if (m_frameHeader != NULL) {
     delete[] m_frameHeader;
     m_frameHeader = NULL;
   }
 
   closefp();
 
-  if(m_pCachedReaderHD != NULL) {
+  if (m_pCachedReaderHD != NULL) {
     delete m_pCachedReaderHD;
     m_pCachedReaderHD = NULL;
   }
-  if(m_pCachedReaderTR != NULL) {
+  if (m_pCachedReaderTR != NULL) {
     delete m_pCachedReaderTR;
     m_pCachedReaderTR = NULL;
   }
 
-  if(vFolders != NULL) {
+  if (vFolders != NULL) {
     delete vFolders;
     vFolders = NULL;
   }
@@ -162,9 +156,9 @@ int jsFileReader::Init(const std::string _jsfilename, const int _NThreads, int w
   Close();
 
   m_filename = _jsfilename;
-  if(m_filename[m_filename.length() - 1] != '/') m_filename.append(1, '/');
+  if (m_filename[m_filename.length() - 1] != '/') m_filename.append(1, '/');
 
-  if(_NThreads < 1 || _NThreads > 1024) {
+  if (_NThreads < 1 || _NThreads > 1024) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid number of threads. %d must be between 0 and 1024", _NThreads);
     return JS_USERERROR;
   }
@@ -172,7 +166,7 @@ int jsFileReader::Init(const std::string _jsfilename, const int _NThreads, int w
 
   std::string tmp2name;
   std::string tmp1name = jseisUtil::fullname(_jsfilename.c_str(), tmp2name);
-  //make sure nfs cache refreshed
+  // make sure nfs cache refreshed
   jseisUtil::nfs_check(tmp1name.c_str());
   /*
    size_t pos0 = tmp1name.rfind('/');
@@ -190,15 +184,13 @@ int jsFileReader::Init(const std::string _jsfilename, const int _NThreads, int w
   std::string fname = m_filename + JS_FILE_PROPERTIES_XML;
   ifile.open(fname.c_str(), std::ifstream::in);
   int waited = 0;
-  while(wait-- > 0 && !ifile.good()) {
+  while (wait-- > 0 && !ifile.good()) {
     ifile.open(fname.c_str(), std::ifstream::in);
     sleep(1), waited++;
   };
-  if(waited > 0) printf("\n total sleep %d secs for reading jsfile: %s\n", waited, fname.c_str());
-  if(!ifile.good()) {
-    ERROR_PRINTF(jsFileReaderLog, "Non-existing JavaSeis XML file: %s", fname.c_str());
-    return JS_USERERROR;
-  }
+  if (waited > 0) printf("\n total sleep %d secs for reading jsfile: %s\n", waited, fname.c_str());
+  assertion(ifile.good(), "Non-existing JavaSeis XML file: %s", fname.c_str());
+
   m_descriptiveName = "Undefined";
   readSingleProperty(m_filename, JS_FILE_STUB, "DescriptiveName", m_descriptiveName);
 
@@ -222,25 +214,25 @@ int jsFileReader::Init(const std::string _jsfilename, const int _NThreads, int w
   delete[] buffer;
 
   ires = m_fileProps->load(xmlString);
-  if(ires != JS_OK) {
+  if (ires != JS_OK) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid JavaSeis XML file %s", fname.c_str());
     return JS_USERERROR;
   }
 
   ires = m_traceProps->load(xmlString);
-  if(ires != JS_OK) {
+  if (ires != JS_OK) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid JavaSeis XML file %s", fname.c_str());
     return JS_USERERROR;
   }
 
   ires = m_customProps->load(xmlString);
-  //if(ires != JS_OK){
-  //   ERROR_PRINTF(jsFileReaderLog, "Invalid JavaSeis XML file %s", fname.c_str());
-  //   return JS_USERERROR;
-  //}
+  // if(ires != JS_OK){
+  //    ERROR_PRINTF(jsFileReaderLog, "Invalid JavaSeis XML file %s", fname.c_str());
+  //    return JS_USERERROR;
+  // }
 
   ires = initExtents(m_filename);
-  if(ires != JS_OK) {
+  if (ires != JS_OK) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid JavaSeis XML file %s", fname.c_str());
     return JS_USERERROR;
   }
@@ -264,11 +256,10 @@ int jsFileReader::Init(const std::string _jsfilename, const int _NThreads, int w
   m_frameHeaderLength = ((long)m_headerLengthBytes * (long)m_numTraces);
 
   m_bIsFloat = false;
-  if(m_fileProps->traceFormat.getName() == DataFormat::FLOAT.getName()) m_bIsFloat = true;
+  if (m_fileProps->traceFormat.getName() == DataFormat::FLOAT.getName()) m_bIsFloat = true;
 
   m_TotalNumOfFrames = 1;
-  for(int i = 2; i < m_fileProps->numDimensions; i++)
-    m_TotalNumOfFrames *= m_fileProps->axisLengths[i];
+  for (int i = 2; i < m_fileProps->numDimensions; i++) m_TotalNumOfFrames *= m_fileProps->axisLengths[i];
 
   m_TotalNumOfTraces = m_TotalNumOfFrames * m_fileProps->axisLengths[1];
 
@@ -276,42 +267,43 @@ int jsFileReader::Init(const std::string _jsfilename, const int _NThreads, int w
   m_pCachedReaderTR = new IOCachedReader(-1, m_IOBufferSize, 1);
 
   //*** check Regularity and compute total number of live traces
-  if(m_fileProps->isMapped == false) {  //if not mapped, then it must be regular
+  if (m_fileProps->isMapped == false) {  // if not mapped, then it must be regular
     m_bIsMapped = false;
     m_bIsRegular = true;
     int NDim = m_fileProps->numDimensions;
     m_TotalNumOfLiveTraces = 1;
-    for(int i = 1; i < NDim; i++) {
+    for (int i = 1; i < NDim; i++) {
       m_TotalNumOfLiveTraces *= m_fileProps->axisLengths[i];
     }
   } else {
-    //else: read TraceMap and check whether it contains a value that differs from m_numTraces
-    //if so, then it is not regular, otherwise regular
+    // else: read TraceMap and check whether it contains a value that differs from m_numTraces
+    // if so, then it is not regular, otherwise regular
     m_bIsMapped = true;
     m_bIsRegular = true;
     std::ifstream ifile;
     std::string fname = m_filename + JS_TRACE_MAP;
     ifile.open(fname.c_str(), std::ifstream::in);
-    if(!ifile.good()) {
+    if (!ifile.good()) {
       ERROR_PRINTF(jsFileReaderLog, "Invalid JavaSeis Format. Error while opening file %s", fname.c_str());
       return JS_USERERROR;
     }
 
     int numReadedInts = 0;
-    int maxInt2read = 4096;
+    int maxInt2read = 40960;
     int *iBuffer = new int[maxInt2read];
     m_TotalNumOfLiveTraces = 0;
-    while(ifile.good() && numReadedInts < m_TotalNumOfFrames) {
+    vector<int>(m_TotalNumOfFrames, 0).swap(trcMap);
+    while (ifile.good() && numReadedInts < m_TotalNumOfFrames) {
       int ints2Read = (m_TotalNumOfFrames - numReadedInts > maxInt2read) ? maxInt2read : m_TotalNumOfFrames - numReadedInts;
-      ifile.read((char*)iBuffer, ints2Read * sizeof(int));
-      for(int i = 0; i < ints2Read; i++) {
-        m_TotalNumOfLiveTraces += iBuffer[i];
-        if(iBuffer[i] != m_numTraces) {
+      ifile.read((char *)iBuffer, ints2Read * sizeof(int));
+      for (int i = 0; i < ints2Read; i++) {
+        if (iBuffer[i] != m_numTraces) {
           m_bIsRegular = false;
-          //              TRACE_PRINTF(jsFileReaderLog, "Not Regular %d!=%d", iBuffer[i],m_numTraces);
+          // printf("jsFileReader: Not Regular, iframe=%d, %d!=%d", numReadedInts, iBuffer[i],m_numTraces);
         }
+        m_TotalNumOfLiveTraces += iBuffer[i];
+        trcMap[numReadedInts++] = iBuffer[i];
       }
-      numReadedInts += ints2Read;
     }
     ifile.close();
     delete[] iBuffer;
@@ -325,28 +317,18 @@ int jsFileReader::Init(const std::string _jsfilename, const int _NThreads, int w
   m_traceBufferArray = new char[m_NThreads * m_frameSize];
   m_headerBufferArray = new char[m_NThreads * m_frameHeaderLength];
 
-  m_traceBuffer = new CharBuffer[m_NThreads]; // !!!!!!!!!!!!!!!!!!!
+  m_traceBuffer = new CharBuffer[m_NThreads];  // !!!!!!!!!!!!!!!!!!!
   m_headerBuffer = new CharBuffer[m_NThreads];
   m_headerBufferView = new IntBuffer[m_NThreads];
 
-  for(int i = 0; i < m_NThreads; i++) {
+  for (int i = 0; i < m_NThreads; i++) {
     m_traceBuffer[i].setByteOrder(m_byteOrder);
-    m_traceBuffer[i].wrap(&m_traceBufferArray[i * m_frameSize], m_frameSize); //during the multi-thread execution should be "wrap"-ed respectively
-    m_headerBuffer[i].wrap(&m_headerBufferArray[i * m_frameHeaderLength], m_frameHeaderLength); //during the multi-thread execution should be "wrap"-ed respectively
+    m_traceBuffer[i].wrap(&m_traceBufferArray[i * m_frameSize],
+                          m_frameSize);  // during the multi-thread execution should be "wrap"-ed respectively
+    m_headerBuffer[i].wrap(&m_headerBufferArray[i * m_frameHeaderLength],
+                           m_frameHeaderLength);  // during the multi-thread execution should be "wrap"-ed respectively
     m_headerBuffer[i].setByteOrder(m_byteOrder);
     m_headerBuffer[i].asIntBuffer(m_headerBufferView[i]);
-  }
-
-  if(m_bIsMapped) {
-    m_trMap = new TraceMap;
-    int trMap_numDim = m_fileProps->numDimensions;
-    long *trMap_axes = new long[trMap_numDim];
-    for(int i = 0; i < trMap_numDim; i++)
-      trMap_axes[i] = m_fileProps->axisLengths[i];
-
-    m_trMap->Init(trMap_axes, trMap_numDim, m_byteOrder, m_filename, "r");
-
-    delete[] trMap_axes;
   }
 
   m_prev_firstTr1 = 0;
@@ -357,9 +339,9 @@ int jsFileReader::Init(const std::string _jsfilename, const int _NThreads, int w
   m_prev_numTraces2 = 0;
   m_prev_frInd2 = 0;
 
-  if(m_fileProps->traceFormat.getName() != DataFormat::SEISPEG.getName()) {
+  if (m_fileProps->traceFormat.getName() != DataFormat::SEISPEG.getName()) {
     m_traceCompressor = new TraceCompressor[m_NThreads];
-    for(int i = 0; i < m_NThreads; i++) {
+    for (int i = 0; i < m_NThreads; i++) {
       m_traceCompressor[i].Init(m_fileProps->traceFormat, m_numSamples, &m_traceBuffer[i]);
     }
     m_bSeisPEG_data = false;
@@ -368,13 +350,13 @@ int jsFileReader::Init(const std::string _jsfilename, const int _NThreads, int w
     //** read 1 frame from the first TraceFile and use it to initalize m_seispegCompressor
     std::string fname = (*m_TrFileExtents)[0].getPath();
     std::ifstream infile(fname.c_str(), std::ifstream::in);
-    if(!infile.good()) return JS_USERERROR;
+    if (!infile.good()) return JS_USERERROR;
     infile.read(m_traceBufferArray, m_frameSize);
     infile.close();
     m_seispegCompressor = new SeisPEG[m_NThreads];
-    for(int i = 0; i < m_NThreads; i++) {
+    for (int i = 0; i < m_NThreads; i++) {
       int ires = m_seispegCompressor[i].Init(m_traceBufferArray);
-      if(ires != JS_OK) {
+      if (ires != JS_OK) {
         delete[] m_seispegCompressor;
         m_seispegCompressor = NULL;
         ERROR_PRINTF(jsFileReaderLog, "Invalid JavaSeis SeisPEG file");
@@ -393,7 +375,7 @@ int jsFileReader::Init(const std::string _jsfilename, const int _NThreads, int w
 }
 
 long jsFileReader::getNtr() const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
@@ -401,7 +383,7 @@ long jsFileReader::getNtr() const {
 }
 
 long jsFileReader::getNFrames() const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
@@ -409,86 +391,73 @@ long jsFileReader::getNFrames() const {
 }
 
 long jsFileReader::readTraces(const long _firstTraceIndex, const long _numOfTraces, float *buffer, char *headbuf) {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return -1;
   }
-  if(_firstTraceIndex < 0 || _firstTraceIndex >= m_TotalNumOfTraces) {
+  if (_firstTraceIndex < 0 || _firstTraceIndex >= m_TotalNumOfTraces) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid trace index. %ld must be in [0,%ld)", _firstTraceIndex, m_TotalNumOfTraces);
     return -1;
   }
-  if(_firstTraceIndex + _numOfTraces > m_TotalNumOfTraces) {
+  if (_firstTraceIndex + _numOfTraces > m_TotalNumOfTraces) {
     ERROR_PRINTF(jsFileReaderLog, "Can't read %ld traces starting from the trace #%ld, because there are only %ld traces total",
                  _numOfTraces, _firstTraceIndex, m_TotalNumOfTraces);
     return -1;
   }
 
-  long frameInd; //index of the frame where trace with the index _firstTraceIndex is located
-  int trInd; //index of the trace # _firstTraceIndex  within the frame with index frameInd
+  long frameInd;  // index of the frame where trace with the index _firstTraceIndex is located
+  int trInd;      // index of the trace # _firstTraceIndex  within the frame with index frameInd
 
   long numOfProcessedTraces = 0;
 
-  if(m_bIsRegular) {
-    frameInd = (long)(_firstTraceIndex / m_numTraces);
-    trInd = _firstTraceIndex - frameInd * m_numTraces;
-  } else {
+  frameInd = (long)(_firstTraceIndex / m_numTraces);
+  trInd = _firstTraceIndex % m_numTraces;
+  if (!m_bIsRegular) {
     frameInd = (long)(_firstTraceIndex / m_numTraces);
     trInd = _firstTraceIndex - frameInd * m_numTraces;
 
-    int numLiveTraces = m_trMap->getFold(frameInd);
-    if(trInd >= numLiveTraces)  //the first trace to be read is dead,
-        //so start from the next live frame
-        {
+    if (trInd >= trcMap[frameInd]) {  // the first trace to be read is dead, so start from the next live frame
       numOfProcessedTraces += (m_numTraces - trInd);
       trInd = 0;
       frameInd++;
 
-      if(frameInd >= m_TotalNumOfFrames) {
+      if (frameInd >= m_TotalNumOfFrames) {
         return 0;
       }
-      numLiveTraces = m_trMap->getFold(frameInd);
-      while(frameInd < m_TotalNumOfFrames - 1 && numLiveTraces == 0) {
+      while (frameInd < m_TotalNumOfFrames - 1 && trcMap[frameInd] == 0) {
         frameInd++;
         numOfProcessedTraces += m_numTraces;
-        if(numOfProcessedTraces >= _numOfTraces) {
+        if (numOfProcessedTraces >= _numOfTraces) {
           return 0;
         }
-        numLiveTraces = m_trMap->getFold(frameInd);
       }
     }
   }
-  /*
-   float *frame = new float[m_numTraces*m_numSamples];
-   char *frameHeader = NULL;
-   if(headbuf!=NULL){
-   frameHeader = new char [m_numTraces*m_headerLengthBytes];
-   }
-   */
   //** allocate buffer at first use
-  if(m_frame == NULL) {
+  if (m_frame == NULL) {
     m_frame = new float[(long)m_numTraces * m_numSamples];
   }
-  if(m_frameHeader == NULL) {
+  if (m_frameHeader == NULL) {
     m_frameHeader = new char[(long)m_numTraces * m_headerLengthBytes];
   }
   //**
 
   float *frame = m_frame;
   char *frameHeader = NULL;
-  if(headbuf != NULL) {
+  if (headbuf != NULL) {
     frameHeader = m_frameHeader;
   }
 
   unsigned long pos = 0;
   unsigned long posHeader = 0;
-  long nReadTraces = 0; //the number of live traces read
+  long nReadTraces = 0;  // the number of live traces read
 
   int nLiveTr = m_numOfFrameLiveTraces;
-  if(m_frameInd != frameInd) { //read only if not in buffer
+  if (m_frameInd != frameInd) {  // read only if not in buffer
     // read first nLiveTr-trInd traces
     nLiveTr = readFrame(frameInd, frame, frameHeader);
     //       printf("Read new frame %ld, nLiveTr=%d\n",frameInd, nLiveTr);
-    if(nLiveTr < 0) {
+    if (nLiveTr < 0) {
       return JS_USERERROR;
     }
     m_frameInd = frameInd;
@@ -496,14 +465,14 @@ long jsFileReader::readTraces(const long _firstTraceIndex, const long _numOfTrac
   }
 
   int numTraces = std::min((long)(nLiveTr - trInd), (long)(_numOfTraces - numOfProcessedTraces));
-  if(numTraces < 0 || numTraces > nLiveTr) {
+  if (numTraces < 0 || numTraces > nLiveTr) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid trace index.");
     return JS_USERERROR;
   }
 
-  memcpy((char*)&buffer[pos], (char*)&frame[trInd * m_numSamples], (numTraces * m_numSamples) * sizeof(float));
-  if(headbuf) {
-    memcpy((char*)&headbuf[posHeader], (char*)&frameHeader[trInd * m_headerLengthBytes], (numTraces * m_headerLengthBytes));
+  memcpy((char *)&buffer[pos], (char *)&frame[trInd * m_numSamples], (numTraces * m_numSamples) * sizeof(float));
+  if (headbuf) {
+    memcpy((char *)&headbuf[posHeader], (char *)&frameHeader[trInd * m_headerLengthBytes], (numTraces * m_headerLengthBytes));
   }
 
   pos += numTraces * m_numSamples;
@@ -513,18 +482,18 @@ long jsFileReader::readTraces(const long _firstTraceIndex, const long _numOfTrac
   frameInd++;
 
   // read the rest of traces
-  while(numOfProcessedTraces < _numOfTraces) {
+  while (numOfProcessedTraces < _numOfTraces) {
     nLiveTr = readFrame(frameInd, frame, frameHeader);
-    if(nLiveTr < 0) {
+    if (nLiveTr < 0) {
       return JS_USERERROR;
     }
     m_frameInd = frameInd;
     m_numOfFrameLiveTraces = nLiveTr;
 
     numTraces = std::min((int)nLiveTr, (int)(_numOfTraces - numOfProcessedTraces));
-    memcpy((char*)&buffer[pos], (char*)&frame[0], (numTraces * m_numSamples) * sizeof(float));
-    if(headbuf) {
-      memcpy((char*)&headbuf[posHeader], (char*)&frameHeader[0], (numTraces * m_headerLengthBytes));
+    memcpy((char *)&buffer[pos], (char *)&frame[0], (numTraces * m_numSamples) * sizeof(float));
+    if (headbuf) {
+      memcpy((char *)&headbuf[posHeader], (char *)&frameHeader[0], (numTraces * m_headerLengthBytes));
     }
     pos += numTraces * m_numSamples;
     posHeader += numTraces * m_headerLengthBytes;
@@ -537,69 +506,66 @@ long jsFileReader::readTraces(const long _firstTraceIndex, const long _numOfTrac
 }
 
 long jsFileReader::readTraceHeaders(const long _firstTraceIndex, const long _numOfTraces, char *headbuf) {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return -1;
   }
-  if(_firstTraceIndex < 0 || _firstTraceIndex >= m_TotalNumOfTraces) {
+  if (_firstTraceIndex < 0 || _firstTraceIndex >= m_TotalNumOfTraces) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid trace index. %ld must be in [0,%ld)", _firstTraceIndex, m_TotalNumOfTraces);
     return -1;
   }
-  if(_firstTraceIndex + _numOfTraces > m_TotalNumOfTraces) {
+  if (_firstTraceIndex + _numOfTraces > m_TotalNumOfTraces) {
     ERROR_PRINTF(jsFileReaderLog, "Can't read %ld traces starting from the trace #%ld, because there are only %ld traces total",
                  _numOfTraces, _firstTraceIndex, m_TotalNumOfTraces);
     return -1;
   }
 
-  long frameInd; //index of the frame where trace with the index _firstTraceIndex is located
-  int trInd; //index of the trace # _firstTraceIndex  within the frame with index frameInd
+  long frameInd;  // index of the frame where trace with the index _firstTraceIndex is located
+  int trInd;      // index of the trace # _firstTraceIndex  within the frame with index frameInd
 
   long numOfProcessedTraces = 0;
 
-  if(m_bIsRegular) {
+  if (m_bIsRegular) {
     frameInd = (long)(_firstTraceIndex / m_numTraces);
     trInd = _firstTraceIndex - frameInd * m_numTraces;
   } else {
     frameInd = (long)(_firstTraceIndex / m_numTraces);
     trInd = _firstTraceIndex - frameInd * m_numTraces;
 
-    int numLiveTraces = m_trMap->getFold(frameInd);
-    if(trInd >= numLiveTraces)  //the first trace to be read is dead,
-        //so start from the next live frame
-        {
+    if (trInd >= trcMap[frameInd])  // the first trace to be read is dead,
+                                    // so start from the next live frame
+    {
       numOfProcessedTraces += ((long)m_numTraces - trInd);
       trInd = 0;
       frameInd++;
 
-      if(frameInd >= m_TotalNumOfFrames) {
+      if (frameInd >= m_TotalNumOfFrames) {
         return 0;
       }
-      numLiveTraces = m_trMap->getFold(frameInd);
-      while(frameInd < m_TotalNumOfFrames - 1 && numLiveTraces == 0) {
+      while (frameInd < m_TotalNumOfFrames - 1 && trcMap[frameInd] == 0) {
         frameInd++;
         numOfProcessedTraces += m_numTraces;
-        if(numOfProcessedTraces >= _numOfTraces) {
+        if (numOfProcessedTraces >= _numOfTraces) {
           return 0;
         }
-        numLiveTraces = m_trMap->getFold(frameInd);
       }
     }
   }
 
-  if(m_frameHeader == NULL) { //allocate buffer at first use
+  if (m_frameHeader == NULL) {  // allocate buffer at first use
     m_frameHeader = new char[(long)m_numTraces * m_headerLengthBytes];
   }
 
   char *frameHeader = m_frameHeader;
 
   unsigned long posHeader = 0;
-  long nReadTraces = 0; //the number of live traces read
+  long nReadTraces = 0;  // the number of live traces read
 
   int nLiveTr = m_numOfFrameHeaderLiveTraces;
-  if(m_frameHeaderInd != frameInd) { //read only if not in buffer
+  if (m_frameHeaderInd != frameInd) {  // read only if not in buffer
     // read first nLiveTr-trInd traces
     nLiveTr = readFrameHeader(frameInd, frameHeader);
-    if(nLiveTr < 0) {
+    if (nLiveTr < 0) {
       return JS_USERERROR;
     }
     m_frameHeaderInd = frameInd;
@@ -607,28 +573,28 @@ long jsFileReader::readTraceHeaders(const long _firstTraceIndex, const long _num
   }
 
   int numTraces = std::min((long)(nLiveTr - trInd), (long)(_numOfTraces - numOfProcessedTraces));
-  if(numTraces < 0 || numTraces > nLiveTr) {
+  if (numTraces < 0 || numTraces > nLiveTr) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid trace index.");
     return JS_USERERROR;
   }
 
-  memcpy((char*)&headbuf[posHeader], (char*)&frameHeader[trInd * m_headerLengthBytes], (numTraces * m_headerLengthBytes));
+  memcpy((char *)&headbuf[posHeader], (char *)&frameHeader[trInd * m_headerLengthBytes], (numTraces * m_headerLengthBytes));
   posHeader += numTraces * m_headerLengthBytes;
   nReadTraces += numTraces;
   numOfProcessedTraces += (long)m_numTraces - trInd;
   frameInd++;
 
   // read the rest of traces
-  while(numOfProcessedTraces < _numOfTraces) {
+  while (numOfProcessedTraces < _numOfTraces) {
     nLiveTr = readFrameHeader(frameInd, frameHeader);
-    if(nLiveTr < 0) {
+    if (nLiveTr < 0) {
       return JS_USERERROR;
     }
     m_frameHeaderInd = frameInd;
     m_numOfFrameHeaderLiveTraces = nLiveTr;
 
     numTraces = std::min((int)nLiveTr, (int)(_numOfTraces - numOfProcessedTraces));
-    memcpy((char*)&headbuf[posHeader], (char*)&frameHeader[0], (numTraces * m_headerLengthBytes));
+    memcpy((char *)&headbuf[posHeader], (char *)&frameHeader[0], (numTraces * m_headerLengthBytes));
     posHeader += numTraces * m_headerLengthBytes;
     nReadTraces += numTraces;
     numOfProcessedTraces += m_numTraces;
@@ -639,71 +605,66 @@ long jsFileReader::readTraceHeaders(const long _firstTraceIndex, const long _num
 }
 
 int jsFileReader::liveToGlobalTraceIndex(const long _liveTraceIndex, long &_globalTraceIndex) {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
-  if(_liveTraceIndex < 0 || _liveTraceIndex >= m_TotalNumOfLiveTraces) {
+  if (_liveTraceIndex < 0 || _liveTraceIndex >= m_TotalNumOfLiveTraces) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid live trace index. %ld must be in [0,%ld)", _liveTraceIndex, m_TotalNumOfLiveTraces);
     return JS_USERERROR;
   }
 
-  long frameInd; //index of the frame where trace with the index _liveTraceIndex is located
-  int trInd; //index of the trace # _liveTraceIndex  within the frame with index frameInd
+  int trInd;  // index of the trace # _liveTraceIndex  within the frame with index frameInd
 
-  if(m_bIsRegular) {
+  if (m_bIsRegular) {
     _globalTraceIndex = _liveTraceIndex;
   } else {
     long numTraces = 0;
     long frInd = 0;
     int nTookFrom = 0;
 
-    if(_liveTraceIndex < m_prev_firstTr1 || (m_prev_firstTr1 == 0 && m_prev_firstTr2 == 0)) {
+    if (_liveTraceIndex < m_prev_firstTr1 || (m_prev_firstTr1 == 0 && m_prev_firstTr2 == 0)) {
       nTookFrom = 0;
-    } else if(_liveTraceIndex >= m_prev_firstTr2) {
+    } else if (_liveTraceIndex >= m_prev_firstTr2) {
       numTraces = m_prev_numTraces2;
       frInd = m_prev_frInd2;
       nTookFrom = 2;
-    } else if(_liveTraceIndex >= m_prev_firstTr1) {
+    } else if (_liveTraceIndex >= m_prev_firstTr1) {
       numTraces = m_prev_numTraces1;
       frInd = m_prev_frInd1;
       nTookFrom = 1;
     }
 
-    int numLiveTraces; //number of live traces in current frame
-    numLiveTraces = m_trMap->getFold(frInd);
-    do {
-      numLiveTraces = m_trMap->getFold(frInd);
-      if(numLiveTraces < 0) {
+    while (numTraces <= _liveTraceIndex) {
+      if (trcMap[frInd] < 0) {
         ERROR_PRINTF(jsFileReaderLog, "Corrupted TraceMap");
         return JS_USERERROR;
       }
-      numTraces += numLiveTraces;
+      numTraces += trcMap[frInd];
       frInd++;
-    } while(numTraces <= _liveTraceIndex);
+    };
 
-    frameInd = frInd - 1;
-    trInd = _liveTraceIndex - (numTraces - numLiveTraces);
+    trInd = _liveTraceIndex - numTraces;
 
-    if(nTookFrom == 0) {
+    if (nTookFrom == 0) {
       m_prev_firstTr1 = _liveTraceIndex;
-      m_prev_numTraces1 = numTraces - numLiveTraces;
-      m_prev_frInd1 = frameInd;
+      m_prev_numTraces1 = numTraces;
+      m_prev_frInd1 = frInd;
 
       m_prev_firstTr2 = _liveTraceIndex;
-      m_prev_numTraces2 = numTraces - numLiveTraces;
-      m_prev_frInd2 = frameInd;
-    } else if(nTookFrom == 1) {
+      m_prev_numTraces2 = numTraces;
+      m_prev_frInd2 = frInd;
+    } else if (nTookFrom == 1) {
       m_prev_firstTr1 = _liveTraceIndex;
-      m_prev_numTraces1 = numTraces - numLiveTraces;
-      m_prev_frInd1 = frameInd;
-    } else if(nTookFrom == 2) {
+      m_prev_numTraces1 = numTraces;
+      m_prev_frInd1 = frInd;
+    } else if (nTookFrom == 2) {
       m_prev_firstTr2 = _liveTraceIndex;
-      m_prev_numTraces2 = numTraces - numLiveTraces;
-      m_prev_frInd2 = frameInd;
+      m_prev_numTraces2 = numTraces;
+      m_prev_frInd2 = frInd;
     }
 
-    _globalTraceIndex = frameInd * (long)m_numTraces + trInd;
+    _globalTraceIndex = frInd * (long)m_numTraces + trInd;
   }
   //     printf(" _liveTraceIndex=%ld, _globalTraceIndex=%ld\n", _liveTraceIndex, _globalTraceIndex);
   return JS_OK;
@@ -716,16 +677,16 @@ long jsFileReader::readWithinLiveTraces(const long _firstTraceIndex, const long 
   int ires;
 
   ires = liveToGlobalTraceIndex(_firstTraceIndex, first_globalTraceIndex);
-  if(ires != JS_OK) {
+  if (ires != JS_OK) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid trace index");
     return -1;
   }
 
-  if(_numOfTraces == 1) {
+  if (_numOfTraces == 1) {
     numTraces = 1;
   } else {
     ires = liveToGlobalTraceIndex(_firstTraceIndex + _numOfTraces - 1, last_globalTraceIndex);
-    if(ires != JS_OK) {
+    if (ires != JS_OK) {
       ERROR_PRINTF(jsFileReaderLog, "Invalid trace index");
       return -1;
     }
@@ -744,16 +705,16 @@ long jsFileReader::readWithinLiveTraceHeaders(const long _firstTraceIndex, const
   int ires;
 
   ires = liveToGlobalTraceIndex(_firstTraceIndex, first_globalTraceIndex);
-  if(ires != JS_OK) {
+  if (ires != JS_OK) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid trace index");
     return -1;
   }
 
-  if(_numOfTraces == 1) {
+  if (_numOfTraces == 1) {
     numTraces = 1;
   } else {
     ires = liveToGlobalTraceIndex(_firstTraceIndex + _numOfTraces - 1, last_globalTraceIndex);
-    if(ires != JS_OK) {
+    if (ires != JS_OK) {
       ERROR_PRINTF(jsFileReaderLog, "Invalid trace index");
       return -1;
     }
@@ -767,10 +728,10 @@ int jsFileReader::initExtents(const std::string &_filename) {
   TRACE_PRINTF(jsFileReaderLog, "Initalizing extents info ...");
 
   int ires;
-  //VirtualFolders vFolders;
+  // VirtualFolders vFolders;
   vFolders = new VirtualFolders;
   ires = vFolders->load(_filename);
-  if(ires < 0) {
+  if (ires < 0) {
     ERROR_PRINTF(jsFileReaderLog, "Unable to load VirtualFolders from  %s\n", _filename.c_str());
     return JS_USERERROR;
   }
@@ -780,14 +741,14 @@ int jsFileReader::initExtents(const std::string &_filename) {
 
   TRACE_PRINTF(jsFileReaderLog, "Init TraceData extents ...");
   ires = m_TrFileExtents->InitFromXML(_filename, JS_TRACE_DATA_XML);
-  if(ires != JS_OK) {
+  if (ires != JS_OK) {
     ERROR_PRINTF(jsFileReaderLog, "TraceFile extents could not be initialized.");
     return ires;
   }
 
   TRACE_PRINTF(jsFileReaderLog, "Init TraceHeader extents ...");
   ires = m_TrHeadExtents->InitFromXML(_filename, JS_TRACE_HEADERS_XML);
-  if(ires != JS_OK) {
+  if (ires != JS_OK) {
     ERROR_PRINTF(jsFileReaderLog, "TraceHeader extents could not be initialized.");
     return ires;
   }
@@ -796,7 +757,7 @@ int jsFileReader::initExtents(const std::string &_filename) {
 }
 
 bool jsFileReader::isRegular() const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
@@ -804,7 +765,7 @@ bool jsFileReader::isRegular() const {
 }
 
 bool jsFileReader::isMapped() const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
@@ -812,7 +773,7 @@ bool jsFileReader::isMapped() const {
 }
 
 int jsFileReader::getHeaderWords(std::vector<std::string> &names, std::vector<std::string> &descriptions) const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
@@ -821,7 +782,7 @@ int jsFileReader::getHeaderWords(std::vector<std::string> &names, std::vector<st
   descriptions.clear();
   int N = m_traceProps->getNumProperties();
   PropertyDescription property;
-  for(int i = 0; i < N; i++) {
+  for (int i = 0; i < N; i++) {
     m_traceProps->getTraceProperty(i, property);
     names.push_back(property.getLabel());
     descriptions.push_back(property.getDescription());
@@ -829,39 +790,39 @@ int jsFileReader::getHeaderWords(std::vector<std::string> &names, std::vector<st
   return N;
 }
 
-float* jsFileReader::allocFrameBuf() {
-  if(!m_bInit) {
+float *jsFileReader::allocFrameBuf() {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return NULL;
   }
   return new float[m_numSamples * (long)m_numTraces]();
 }
 
-char* jsFileReader::allocHdrBuf(bool initVals) {
-  if(!m_bInit) {
+char *jsFileReader::allocHdrBuf(bool initVals) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return NULL;
   }
   char *hdrBuf = new char[m_headerLengthBytes * (long)m_numTraces]();
-  //memset(hdrBuf, 0, m_headerLengthBytes * m_numTraces);
+  // memset(hdrBuf, 0, m_headerLengthBytes * m_numTraces);
 
-  if(initVals) { // init with SeisSpace standard values
+  if (initVals) {  // init with SeisSpace standard values
     float TFULL_E = m_fileProps->physicalOrigins[0] + m_fileProps->axisLengths[0] * m_fileProps->physicalDeltas[0];
     float TLIVE_E = TFULL_E;
-    for(int i = 0; i < m_numTraces; i++) {
-      if(m_traceProps->exists("TRC_TYPE")) getHdrEntry("TRC_TYPE").setIntVal(&hdrBuf[i * m_headerLengthBytes], 1);
-      if(m_traceProps->exists("TLIVE_S")) getHdrEntry("TLIVE_S").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 0.0f);
-      if(m_traceProps->exists("TFULL_S")) getHdrEntry("TFULL_S").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 0.0f);
-      if(m_traceProps->exists("TLIVE_E")) getHdrEntry("TLIVE_E").setFloatVal(&hdrBuf[i * m_headerLengthBytes], TLIVE_E);
-      if(m_traceProps->exists("TFULL_E")) getHdrEntry("TFULL_E").setFloatVal(&hdrBuf[i * m_headerLengthBytes], TFULL_E);
-      if(m_traceProps->exists("LEN_SURG")) getHdrEntry("LEN_SURG").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 0.0f);
-      if(m_traceProps->exists("TOT_STAT")) getHdrEntry("TOT_STAT").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 0.0f);
-      if(m_traceProps->exists("NA_STAT")) getHdrEntry("NA_STAT").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 0.0f);
-      if(m_traceProps->exists("AMP_NORM")) getHdrEntry("AMP_NORM").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 1.0f);
-      if(m_traceProps->exists("TR_FOLD")) getHdrEntry("TR_FOLD").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 1.0f);
-      if(m_traceProps->exists("SKEWSTAT")) getHdrEntry("SKEWSTAT").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 0.0f);
-      if(m_traceProps->exists("PAD_TRC")) getHdrEntry("PAD_TRC").setIntVal(&hdrBuf[i * m_headerLengthBytes], 0);
-      if(m_traceProps->exists("NMO_APLD")) getHdrEntry("NMO_APLD").setIntVal(&hdrBuf[i * m_headerLengthBytes], 0);
+    for (int i = 0; i < m_numTraces; i++) {
+      if (m_traceProps->exists("TRC_TYPE")) getHdrEntry("TRC_TYPE").setIntVal(&hdrBuf[i * m_headerLengthBytes], 1);
+      if (m_traceProps->exists("TLIVE_S")) getHdrEntry("TLIVE_S").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 0.0f);
+      if (m_traceProps->exists("TFULL_S")) getHdrEntry("TFULL_S").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 0.0f);
+      if (m_traceProps->exists("TLIVE_E")) getHdrEntry("TLIVE_E").setFloatVal(&hdrBuf[i * m_headerLengthBytes], TLIVE_E);
+      if (m_traceProps->exists("TFULL_E")) getHdrEntry("TFULL_E").setFloatVal(&hdrBuf[i * m_headerLengthBytes], TFULL_E);
+      if (m_traceProps->exists("LEN_SURG")) getHdrEntry("LEN_SURG").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 0.0f);
+      if (m_traceProps->exists("TOT_STAT")) getHdrEntry("TOT_STAT").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 0.0f);
+      if (m_traceProps->exists("NA_STAT")) getHdrEntry("NA_STAT").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 0.0f);
+      if (m_traceProps->exists("AMP_NORM")) getHdrEntry("AMP_NORM").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 1.0f);
+      if (m_traceProps->exists("TR_FOLD")) getHdrEntry("TR_FOLD").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 1.0f);
+      if (m_traceProps->exists("SKEWSTAT")) getHdrEntry("SKEWSTAT").setFloatVal(&hdrBuf[i * m_headerLengthBytes], 0.0f);
+      if (m_traceProps->exists("PAD_TRC")) getHdrEntry("PAD_TRC").setIntVal(&hdrBuf[i * m_headerLengthBytes], 0);
+      if (m_traceProps->exists("NMO_APLD")) getHdrEntry("NMO_APLD").setIntVal(&hdrBuf[i * m_headerLengthBytes], 0);
     }
   }
 
@@ -869,43 +830,40 @@ char* jsFileReader::allocHdrBuf(bool initVals) {
 }
 
 int jsFileReader::getAxisLabels(std::vector<std::string> &axis) const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
   axis.clear();
-  for(int i = 0; i < m_fileProps->numDimensions; i++)
-    axis.push_back(m_fileProps->axisLabelsStr[i]);
+  for (int i = 0; i < m_fileProps->numDimensions; i++) axis.push_back(m_fileProps->axisLabelsStr[i]);
 
   return m_fileProps->numDimensions;
 }
 
 int jsFileReader::getAxisDomains(std::vector<std::string> &domain) const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
   domain.clear();
-  for(int i = 0; i < m_fileProps->numDimensions; i++)
-    domain.push_back(m_fileProps->axisDomainsStr[i]);
+  for (int i = 0; i < m_fileProps->numDimensions; i++) domain.push_back(m_fileProps->axisDomainsStr[i]);
 
   return m_fileProps->numDimensions;
 }
 
 int jsFileReader::getAxisUnits(std::vector<std::string> &units) const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
   units.clear();
-  for(int i = 0; i < m_fileProps->numDimensions; i++)
-    units.push_back(m_fileProps->axisUnitsStr[i]);
+  for (int i = 0; i < m_fileProps->numDimensions; i++) units.push_back(m_fileProps->axisUnitsStr[i]);
 
   return m_fileProps->numDimensions;
 }
 
 int jsFileReader::getNDim() const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
@@ -913,7 +871,7 @@ int jsFileReader::getNDim() const {
 }
 
 bool jsFileReader::isSeisPEG() const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
@@ -921,7 +879,7 @@ bool jsFileReader::isSeisPEG() const {
 }
 
 bool jsFileReader::isFloat() const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
@@ -929,19 +887,19 @@ bool jsFileReader::isFloat() const {
 }
 
 int jsFileReader::getAxisLogicalValues(int index, std::vector<long> &axis) const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
   int NDim = getNDim();
-  if(index < 0 || index >= NDim) {
+  if (index < 0 || index >= NDim) {
     ERROR_PRINTF(jsFileReaderLog, "Axis index %d must be smaller than %d\n", index, NDim);
     return JS_USERERROR;
   }
   axis.clear();
   int axisLen = m_fileProps->axisLengths[index];
 
-  for(int i = 0; i < axisLen; i++) {
+  for (int i = 0; i < axisLen; i++) {
     long fval;
     fval = m_fileProps->logicalOrigins[index] + i * m_fileProps->logicalDeltas[index];
     axis.push_back(fval);
@@ -950,19 +908,19 @@ int jsFileReader::getAxisLogicalValues(int index, std::vector<long> &axis) const
 }
 
 int jsFileReader::getAxisPhysicalValues(int index, std::vector<double> &axis) const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
   int NDim = getNDim();
-  if(index < 0 || index >= NDim) {
+  if (index < 0 || index >= NDim) {
     ERROR_PRINTF(jsFileReaderLog, "Axis index %d must be smaller than %d\n", index, NDim);
     return JS_USERERROR;
   }
   axis.clear();
   int axisLen = m_fileProps->axisLengths[index];
 
-  for(int i = 0; i < axisLen; i++) {
+  for (int i = 0; i < axisLen; i++) {
     double fval;
     fval = m_fileProps->physicalOrigins[index] + i * m_fileProps->physicalDeltas[index];
     axis.push_back(fval);
@@ -970,20 +928,20 @@ int jsFileReader::getAxisPhysicalValues(int index, std::vector<double> &axis) co
   return axisLen;
 }
 
-//retrun global offset in TraceFile(s) or TraceHeader(s) corresponding to position (array position directly)
-//for TraceFile(s) len1d must be equal to traceLen, ie.len1d=m_compess_traceSize, and for
-//TraceHeader(s) len1d=m_headerLengthBytes
+// retrun global offset in TraceFile(s) or TraceHeader(s) corresponding to position (array position directly)
+// for TraceFile(s) len1d must be equal to traceLen, ie.len1d=m_compess_traceSize, and for
+// TraceHeader(s) len1d=m_headerLengthBytes
 long jsFileReader::getOffsetInExtents(int *indices, int len1d) const {
   int ind_len = m_fileProps->numDimensions;
   unsigned long glb_offset = indices[0];
   long volsize = 1;
-  for(int i = 1; i < ind_len; i++) {
-    if(indices[i] < 0 || indices[i] >= m_fileProps->axisLengths[i]) {
+  for (int i = 1; i < ind_len; i++) {
+    if (indices[i] < 0 || indices[i] >= m_fileProps->axisLengths[i]) {
       ERROR_PRINTF(jsFileReaderLog, "index %d must be positive and smaller than %ld", indices[i], m_fileProps->axisLengths[i]);
       return JS_USERERROR;
     }
     volsize = len1d;
-    for(int j = i; j >= 2; j--) {
+    for (int j = i; j >= 2; j--) {
       volsize *= m_fileProps->axisLengths[j];
     }
     glb_offset += indices[i] * volsize;
@@ -997,26 +955,26 @@ int jsFileReader::readTrace(const int *_position, float *trace) {
 }
 
 int jsFileReader::readTrace(const long _traceIndex, float *trace) {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
-  if(_traceIndex < 0 || _traceIndex >= m_TotalNumOfTraces) {
+  if (_traceIndex < 0 || _traceIndex >= m_TotalNumOfTraces) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid trace index. %ld must be in [0,%ld)", _traceIndex, m_TotalNumOfTraces);
     return JS_USERERROR;
   }
   long glb_offset = (long)_traceIndex * (long)m_compess_traceSize;
-  if(m_bIsFloat) {  //if float, there is no need to uncompress, we can read directly into trace (should be faster)
-    int ires = readTraceBuffer(glb_offset, (char*)trace, m_compess_traceSize);
-    if(ires != JS_OK) return ires;
-    if(nativeOrder() != m_byteOrder) endian_swap((void*)trace, m_numSamples, sizeof(float));
-  } else if(!m_bSeisPEG_data) {
-    //read trace from the TraceFile(s)
+  if (m_bIsFloat) {  // if float, there is no need to uncompress, we can read directly into trace (should be faster)
+    int ires = readTraceBuffer(glb_offset, (char *)trace, m_compess_traceSize);
+    if (ires != JS_OK) return ires;
+    if (nativeOrder() != m_byteOrder) endian_swap((void *)trace, m_numSamples, sizeof(float));
+  } else if (!m_bSeisPEG_data) {
+    // read trace from the TraceFile(s)
     int ires = readTraceBuffer(glb_offset, &m_traceBufferArray[0], m_compess_traceSize);
-    if(ires != JS_OK) return ires;
+    if (ires != JS_OK) return ires;
     m_traceBuffer->position(0);
     m_traceCompressor->unpackFrame(1, trace);
-  } else { //  is SeisPEG
+  } else {  //  is SeisPEG
     ERROR_PRINTF(jsFileReaderLog, "This function can't be used for SeisPEG formated data. Use readFrame instead.");
     return JS_USERERROR;
   }
@@ -1025,26 +983,26 @@ int jsFileReader::readTrace(const long _traceIndex, float *trace) {
 }
 
 int jsFileReader::readFrame(const long _frameIndex, float *frame, char *headbuf) {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
-  if(_frameIndex < 0 || _frameIndex >= m_TotalNumOfFrames) {
+  if (_frameIndex < 0 || _frameIndex >= m_TotalNumOfFrames) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid frame index. %ld must be in [0,%ld)\n", _frameIndex, m_TotalNumOfFrames);
     return JS_USERERROR;
   }
 
   long glb_offset = _frameIndex * m_frameSize;
   int numLiveTraces = getNumOfLiveTraces(_frameIndex);
-  if(numLiveTraces == 0) return 0;
+  if (numLiveTraces == 0) return 0;
 
   long bytesInFrame = (long)numLiveTraces * (long)m_compess_traceSize;
 
-  if(headbuf != NULL && !m_bSeisPEG_data) {
+  if (headbuf != NULL && !m_bSeisPEG_data) {
     long glb_head_offset = _frameIndex * m_frameHeaderLength;
     long bytesInHeaderFrame = numLiveTraces * m_headerLengthBytes;
-    int ires = readHeaderBuffer(glb_head_offset, (char*)&m_headerBufferArray[0], bytesInHeaderFrame);
-    if(ires != JS_OK) {
+    int ires = readHeaderBuffer(glb_head_offset, (char *)&m_headerBufferArray[0], bytesInHeaderFrame);
+    if (ires != JS_OK) {
       ERROR_PRINTF(jsFileReaderLog, "Can't read frame header from\n  %s.\n  frameIndex=%ld, hdrLength=%ld, numLiveTraces=%d",
                    m_filename.c_str(), _frameIndex, m_frameHeaderLength, numLiveTraces);
       return ires;
@@ -1052,24 +1010,24 @@ int jsFileReader::readFrame(const long _frameIndex, float *frame, char *headbuf)
     m_traceProps->getTraceHeader(0, numLiveTraces, headbuf);
   }
 
-  if(frame) { // skip reading data if it's nullptr
-    if(m_bIsFloat) { //if float, there is no need to uncompress, we can read directly into frame (should be faster)
-      int ires = readTraceBuffer(glb_offset, (char*)frame, bytesInFrame);
-      if(ires != JS_OK) {
+  if (frame) {         // skip reading data if it's nullptr
+    if (m_bIsFloat) {  // if float, there is no need to uncompress, we can read directly into frame (should be faster)
+      int ires = readTraceBuffer(glb_offset, (char *)frame, bytesInFrame);
+      if (ires != JS_OK) {
         ERROR_PRINTF(jsFileReaderLog, "Can't read frame from %s", m_filename.c_str());
         return ires;
       }
-      if(nativeOrder() != m_byteOrder) endian_swap((void*)frame, m_numSamples * m_numTraces, sizeof(float));
+      if (nativeOrder() != m_byteOrder) endian_swap((void *)frame, m_numSamples * m_numTraces, sizeof(float));
     } else {
-      //read gather from the TraceFile(s)
+      // read gather from the TraceFile(s)
       int ires = readTraceBuffer(glb_offset, &m_traceBufferArray[0], bytesInFrame);
-      if(ires != JS_OK) {
+      if (ires != JS_OK) {
         ERROR_PRINTF(jsFileReaderLog, "Can't read frame from %s", m_filename.c_str());
         return ires;
       }
-      //if dataFormat is not FLOAT - uncompress
-      if(m_bSeisPEG_data) {
-        if(headbuf != NULL) {
+      // if dataFormat is not FLOAT - uncompress
+      if (m_bSeisPEG_data) {
+        if (headbuf != NULL) {
           m_seispegCompressor->uncompress(m_traceBufferArray, bytesInFrame, frame, numLiveTraces, m_headerBufferView, m_headerLengthBytes);
           m_traceProps->getTraceHeader(0, numLiveTraces, headbuf);
         } else {
@@ -1090,19 +1048,19 @@ int jsFileReader::readFrame(const int *_position, float *frame, char *headbuf) {
   return readFrame(frameIndex, frame, headbuf);
 }
 
-int jsFileReader::indexToLogical(int *position) const { // *input position must be in index, and will convert to logical corrdinates
+int jsFileReader::indexToLogical(int *position) const {  // *input position must be in index, and will convert to logical corrdinates
   int numAxis = m_fileProps->numDimensions;
-  for(int i = 0; i < numAxis; i++) {
+  for (int i = 0; i < numAxis; i++) {
     position[i] = (int)(m_fileProps->logicalOrigins[i] + position[i] * m_fileProps->logicalDeltas[i]);
   }
   return 0;
 }
 
-int jsFileReader::logicalToIndex(int *position) const { // *input position must be in logical corrdinates and will convert to index
+int jsFileReader::logicalToIndex(int *position) const {  // *input position must be in logical corrdinates and will convert to index
   int numAxis = m_fileProps->numDimensions;
-  for(int i = 0; i < numAxis; i++) {
+  for (int i = 0; i < numAxis; i++) {
     position[i] = (int)((position[i] - m_fileProps->logicalOrigins[i]) / m_fileProps->logicalDeltas[i]);
-    if(position[i] < 0 || position[i] > m_fileProps->axisLengths[i]) {
+    if (position[i] < 0 || position[i] > m_fileProps->axisLengths[i]) {
       ERROR_PRINTF(jsFileReaderLog, "Unable to locate a frame with value %d in dimension %d", position[i], i);
       return -1;
     }
@@ -1110,18 +1068,18 @@ int jsFileReader::logicalToIndex(int *position) const { // *input position must 
   return 0;
 }
 
-long jsFileReader::getFrameIndex(const int *position) const { // *position must be in logical coordinate
+long jsFileReader::getFrameIndex(const int *position) const {  // *position must be in logical coordinate
   int numAxis = m_fileProps->numDimensions;
   int *index = new int[numAxis];
-  for(int i = 0; i < numAxis; i++) {
+  for (int i = 0; i < numAxis; i++) {
     index[i] = position[i];
   }
   logicalToIndex(index);
 
   long frIndex = index[2];
-  for(int i = 3; i < numAxis; i++) {
+  for (int i = 3; i < numAxis; i++) {
     long volsize = 1;
-    for(int j = 2; j < i; j++) {
+    for (int j = 2; j < i; j++) {
       volsize *= m_fileProps->axisLengths[j];
     }
     frIndex += index[i] * volsize;
@@ -1130,18 +1088,18 @@ long jsFileReader::getFrameIndex(const int *position) const { // *position must 
   return frIndex;
 }
 
-long jsFileReader::getTraceIndex(const int *position) const { // *position must be in logical coordinate
+long jsFileReader::getTraceIndex(const int *position) const {  // *position must be in logical coordinate
   int numAxis = m_fileProps->numDimensions;
   int *index = new int[numAxis];
-  for(int i = 0; i < numAxis; i++) {
+  for (int i = 0; i < numAxis; i++) {
     index[i] = position[i];
   }
   logicalToIndex(index);
 
   long trIndex = index[1];
-  for(int i = 2; i < numAxis; i++) {
+  for (int i = 2; i < numAxis; i++) {
     long volsize = 1;
-    for(int j = 1; j < i; j++) {
+    for (int j = 1; j < i; j++) {
       volsize *= m_fileProps->axisLengths[j];
     }
     trIndex += index[i] * volsize;
@@ -1149,15 +1107,11 @@ long jsFileReader::getTraceIndex(const int *position) const { // *position must 
   return trIndex;
 }
 
-int jsFileReader::getNumOfLiveTraces(int _frameIndex) const {
-  int numLiveTraces = m_numTraces;
-  if(!m_bIsRegular) numLiveTraces = m_trMap->getFold(_frameIndex);
-  return numLiveTraces;
-}
+int jsFileReader::getNumOfLiveTraces(int _frameIndex) const { return m_bIsRegular ? m_numTraces : trcMap[_frameIndex]; }
 
 int jsFileReader::readRawFrames(const int *_position, int _NFrames, char *rawframe, int *numLiveTraces) {
   //   printf("position(%d,%d)\n", position[0],position[1]);
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
@@ -1168,34 +1122,33 @@ int jsFileReader::readRawFrames(const int *_position, int _NFrames, char *rawfra
 }
 
 int jsFileReader::readRawFrames(const long _frameIndex, int _NFrames, char *rawframe, int *numLiveTraces) {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
-  if(_frameIndex < 0 || _frameIndex >= m_TotalNumOfFrames) {
+  if (_frameIndex < 0 || _frameIndex >= m_TotalNumOfFrames) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid frame index. %ld must be in [0,%ld)\n", _frameIndex, m_TotalNumOfFrames);
     return JS_USERERROR;
   }
-  if(_frameIndex + _NFrames > m_TotalNumOfFrames) {
-    TRACE_PRINTF(
-        jsFileReaderLog,
-        "Can't read %d frames starting from the frame #%ld, because there are only %ld frames total.\n  \
+  if (_frameIndex + _NFrames > m_TotalNumOfFrames) {
+    TRACE_PRINTF(jsFileReaderLog,
+                 "Can't read %d frames starting from the frame #%ld, because there are only %ld frames total.\n  \
           Read %ld frames indstead.",
-        _NFrames, _frameIndex, m_TotalNumOfFrames, m_TotalNumOfFrames - _frameIndex);
+                 _NFrames, _frameIndex, m_TotalNumOfFrames, m_TotalNumOfFrames - _frameIndex);
     _NFrames = m_TotalNumOfFrames - _frameIndex;
   }
 
   long glb_offset = _frameIndex * m_frameSize;
-  for(int i = 0; i < _NFrames; i++) {
+  for (int i = 0; i < _NFrames; i++) {
     numLiveTraces[i] = getNumOfLiveTraces(_frameIndex + i);
-    if(numLiveTraces[i] < 0) {
+    if (numLiveTraces[i] < 0) {
       ERROR_PRINTF(jsFileReaderLog, "Can't read from TraceMap");
       return JS_USERERROR;
     }
   }
   long numBytes2Read = m_frameSize * _NFrames;
   int ires = readTraceBuffer(glb_offset, rawframe, numBytes2Read);
-  if(ires != JS_OK) {
+  if (ires != JS_OK) {
     ERROR_PRINTF(jsFileReaderLog, "Can't read frame from the file");
     return ires;
   }
@@ -1206,8 +1159,7 @@ int jsFileReader::readRawFrames(const long _frameIndex, int _NFrames, char *rawf
 vector<int> jsFileReader::fillPositionPartial(vector<int> posPartial) {
   vector<int> position(m_fileProps->numDimensions, 0);
   int n = std::min(posPartial.size(), position.size());
-  for(int i = 0; i < n; i++)
-    position[i] = posPartial[i];
+  for (int i = 0; i < n; i++) position[i] = posPartial[i];
   return position;
 }
 
@@ -1237,32 +1189,32 @@ int jsFileReader::readRawFrames(vector<int> posPartial, int NFrames, char *rawfr
 }
 
 int jsFileReader::uncompressRawFrame(char *rawframe, int numLiveTraces, int iThread, float *frame, char *headbuf) {
-  if(headbuf != NULL && !m_bSeisPEG_data) {
-    TRACE_PRINTF(
-        jsFileReaderLog,
-        "Can't initialize header for non SeisPEG data.\n \
+  if (headbuf != NULL && !m_bSeisPEG_data) {
+    TRACE_PRINTF(jsFileReaderLog,
+                 "Can't initialize header for non SeisPEG data.\n \
                                      For header initialization of non-SeisPEG data use readFrameHeader() function");
     //       return JS_USERERROR;
   }
 
-  if(headbuf == NULL && m_bSeisPEG_data) {
+  if (headbuf == NULL && m_bSeisPEG_data) {
     ERROR_PRINTF(jsFileReaderLog, "For SeisPEG data headbuf must be pre-allocated.");
     return JS_USERERROR;
   }
 
-  if(numLiveTraces <= 0) return numLiveTraces;
+  if (numLiveTraces <= 0) return numLiveTraces;
 
-  if(m_bIsFloat) {  //if float, there is no need to uncompress, we can read directly into frame (should be faster)
-    memcpy((char*)frame, (char*)rawframe, m_numSamples * numLiveTraces * sizeof(float));
-    if(nativeOrder() != m_byteOrder) endian_swap((void*)rawframe, m_numSamples * numLiveTraces, sizeof(float));
+  if (m_bIsFloat) {  // if float, there is no need to uncompress, we can read directly into frame (should be faster)
+    memcpy((char *)frame, (char *)rawframe, m_numSamples * numLiveTraces * sizeof(float));
+    if (nativeOrder() != m_byteOrder) endian_swap((void *)rawframe, m_numSamples * numLiveTraces, sizeof(float));
 
   } else {
-    //if dataFormat is not FLOAT - uncompress
-    if(m_bSeisPEG_data) {
-      if(headbuf != NULL) {
-        m_seispegCompressor[iThread].uncompress(rawframe, m_frameSize, frame, numLiveTraces, (int*)headbuf, m_headerLengthWords);
-        if(nativeOrder() != m_byteOrder) m_traceProps->swapHeaders(headbuf, numLiveTraces);
-      } else m_seispegCompressor[iThread].uncompress(rawframe, m_frameSize, frame, numLiveTraces);
+    // if dataFormat is not FLOAT - uncompress
+    if (m_bSeisPEG_data) {
+      if (headbuf != NULL) {
+        m_seispegCompressor[iThread].uncompress(rawframe, m_frameSize, frame, numLiveTraces, (int *)headbuf, m_headerLengthWords);
+        if (nativeOrder() != m_byteOrder) m_traceProps->swapHeaders(headbuf, numLiveTraces);
+      } else
+        m_seispegCompressor[iThread].uncompress(rawframe, m_frameSize, frame, numLiveTraces);
     } else {
       m_traceCompressor[iThread].updateBuffer(rawframe, m_frameSize);
       m_traceCompressor[iThread].unpackFrame(numLiveTraces, frame);
@@ -1272,8 +1224,8 @@ int jsFileReader::uncompressRawFrame(char *rawframe, int numLiveTraces, int iThr
   return numLiveTraces;
 }
 
-//read buflen number of bytes from TraceFile(s) into buf
-//buf must be pre-allocated with len=buflen
+// read buflen number of bytes from TraceFile(s) into buf
+// buf must be pre-allocated with len=buflen
 int jsFileReader::readTraceBuffer(long offset, char *buf, long buflen) {
   int lowInd = m_TrFileExtents->getExtentIndex(offset + 1);
   int upInd = m_TrFileExtents->getExtentIndex(offset + buflen);
@@ -1282,7 +1234,7 @@ int jsFileReader::readTraceBuffer(long offset, char *buf, long buflen) {
   //      printf("%ld, %ld, %d, %d\n", offset, buflen, lowInd, upInd);
   //    }
 
-  if(lowInd < 0 || upInd < 0 || upInd < lowInd) {
+  if (lowInd < 0 || upInd < 0 || upInd < lowInd) {
     ERROR_PRINTF(jsFileReaderLog, "Can't read %ld bytes starting from offset %ld in TraceFile(s)", buflen, offset);
     return JS_USERERROR;
   }
@@ -1290,36 +1242,30 @@ int jsFileReader::readTraceBuffer(long offset, char *buf, long buflen) {
   long rest_buflen = buflen;
   long bytes2read = buflen;
   long loc_offset_trFile = offset - (*m_TrFileExtents)[lowInd].getStartOffset();
-  for(int extInd = lowInd; extInd <= upInd; extInd++) {
+  for (int extInd = lowInd; extInd <= upInd; extInd++) {
     long extSize = (*m_TrFileExtents)[extInd].getExtentSize();
-    if(loc_offset_trFile + rest_buflen > extSize) {
+    if (loc_offset_trFile + rest_buflen > extSize) {
       bytes2read = extSize - loc_offset_trFile;
     }
 
-    if(m_currIndexOfTrFileExtent != extInd) {
+    if (m_currIndexOfTrFileExtent != extInd) {
       //          TRACE_VAR(jsFileReaderLog,offset);
       //          TRACE_VAR(jsFileReaderLog,extInd);
-      if(m_curr_trffd != -1) ::close(m_curr_trffd);
+      if (m_curr_trffd != -1) ::close(m_curr_trffd);
       std::string fname = (*m_TrFileExtents)[extInd].getPath();
       m_curr_trffd = ::open(fname.c_str(), O_RDONLY);
       TRACE_PRINTF(jsFileReaderLog, "Open new file %d, %d, %s, %d", m_currIndexOfTrFileExtent, extInd, fname.c_str(), m_curr_trffd);
-      if(m_curr_trffd < 0) {
-        return JS_WARNING;
-      }
+      assertion(m_curr_trffd >= 0, "Javaseis: Error opening '%s' for reading!", fname.c_str());
+
+      long filesize = (*m_TrFileExtents)[extInd].getExtentSizeOnDisk();
+      assertion(filesize > 0, "Javaseis: '%s' size is %ld!", fname.c_str(), filesize);
+
       m_currIndexOfTrFileExtent = extInd;
-      m_pCachedReaderTR->setNewFile(m_curr_trffd, (*m_TrFileExtents)[extInd].getExtentSizeOnDisk());
+      m_pCachedReaderTR->setNewFile(m_curr_trffd, filesize);
     }
-    //      printf("extInd=%d, m_curr_trffd=%d, rest_buflen=%ld, loc_offset_trFile=%lu\n",extInd,m_curr_trffd,rest_buflen,loc_offset_trFile);
-    //      ::pread (m_curr_trffd, &buf[buflen-rest_buflen], bytes2read, loc_offset_trFile);
-    m_pCachedReaderTR->read(loc_offset_trFile, (unsigned char*)&buf[buflen - rest_buflen], bytes2read);
-    /*
-     if( ::pread (m_curr_trffd, &buf[buflen-rest_buflen], bytes2read, loc_offset_trFile) != bytes2read){
-     m_currIndexOfTrFileExtent=-1;
-     ::close(m_curr_trffd);
-     m_curr_trffd=-1;
-     return JS_WARNING;
-     }
-     */
+    //      printf("extInd=%d, m_curr_trffd=%d, rest_buflen=%ld,
+    //      loc_offset_trFile=%lu\n",extInd,m_curr_trffd,rest_buflen,loc_offset_trFile);
+    m_pCachedReaderTR->read(loc_offset_trFile, (unsigned char *)&buf[buflen - rest_buflen], bytes2read);
     rest_buflen -= bytes2read;
     bytes2read = buflen - rest_buflen;
     loc_offset_trFile = 0;
@@ -1328,45 +1274,48 @@ int jsFileReader::readTraceBuffer(long offset, char *buf, long buflen) {
   return JS_OK;
 }
 
-//read buflen number of bytes from TraceHeader(s) into buf
-//buf must be pre-allocated with len=buflen
+// read buflen number of bytes from TraceHeader(s) into buf
+// buf must be pre-allocated with len=buflen
 int jsFileReader::readHeaderBuffer(long offset, char *buf, long buflen) {
   int lowInd = m_TrHeadExtents->getExtentIndex(offset + 1);
   int upInd = m_TrHeadExtents->getExtentIndex(offset + buflen);
 
-  if(lowInd < 0 || upInd < 0 || upInd < lowInd) {
+  if (lowInd < 0 || upInd < 0 || upInd < lowInd) {
     return JS_USERERROR;
   }
 
   long rest_buflen = buflen;
   long bytes2read = buflen;
   long loc_offset_trFile = offset - (*m_TrHeadExtents)[lowInd].getStartOffset();
-  for(int extInd = lowInd; extInd <= upInd; extInd++) {
+  for (int extInd = lowInd; extInd <= upInd; extInd++) {
     long extSize = (*m_TrHeadExtents)[extInd].getExtentSize();
-    if(loc_offset_trFile + rest_buflen > extSize) {
+    if (loc_offset_trFile + rest_buflen > extSize) {
       bytes2read = extSize - loc_offset_trFile;
     }
 
-    if(m_currIndexOfTrHeadExtent != extInd) {
-      if(m_curr_trhfd != -1) ::close(m_curr_trhfd);
+    if (m_currIndexOfTrHeadExtent != extInd) {
+      if (m_curr_trhfd != -1) ::close(m_curr_trhfd);
       std::string fname = (*m_TrHeadExtents)[extInd].getPath();
       m_curr_trhfd = ::open(fname.c_str(), O_RDONLY);
-      //        printf("****** open new header file pInd=%d, cInd=%d, name=%s, fd=%d\n", m_currIndexOfTrHeadExtent,extInd, fname.c_str(), m_curr_trhfd );
-      if(m_curr_trhfd < 0) {
+      //        printf("****** open new header file pInd=%d, cInd=%d, name=%s, fd=%d\n", m_currIndexOfTrHeadExtent,extInd, fname.c_str(),
+      //        m_curr_trhfd );
+      if (m_curr_trhfd < 0) {
         printf("### Failed to open header file %s\n", fname.c_str());
         return JS_WARNING;
       }
       m_currIndexOfTrHeadExtent = extInd;
       m_pCachedReaderHD->setNewFile(m_curr_trhfd, (*m_TrHeadExtents)[extInd].getExtentSizeOnDisk());
     }
-    //       printf("lowInd=%d, upInd=%d, extInd=%d, m_curr_trhfd=%d, bytes2read=%ld, loc_offset_trFile=%lu, glb_offest=%ld\n",lowInd, upInd, extInd,m_curr_trhfd, bytes2read, loc_offset_trFile, offset);
+    //       printf("lowInd=%d, upInd=%d, extInd=%d, m_curr_trhfd=%d, bytes2read=%ld, loc_offset_trFile=%lu, glb_offest=%ld\n",lowInd,
+    //       upInd, extInd,m_curr_trhfd, bytes2read, loc_offset_trFile, offset);
     //     long bread = ::pread(m_curr_trhfd, &buf[buflen-rest_buflen], bytes2read, loc_offset_trFile);
     //     if(bread != bytes2read)
     //     {
-    if(m_pCachedReaderHD->read(loc_offset_trFile, (unsigned char*)&buf[buflen - rest_buflen], bytes2read) != true) {
-      //       printf("*************** lowInd=%d, upInd=%d, extInd=%d, m_curr_trhfd=%d, bytes2read=%ld, loc_offset_trFile=%lu\t %s \n",lowInd, upInd, extInd,m_curr_trhfd,bytes2read, loc_offset_trFile, strerror(errno));
+    if (m_pCachedReaderHD->read(loc_offset_trFile, (unsigned char *)&buf[buflen - rest_buflen], bytes2read) != true) {
+      //       printf("*************** lowInd=%d, upInd=%d, extInd=%d, m_curr_trhfd=%d, bytes2read=%ld, loc_offset_trFile=%lu\t %s
+      //       \n",lowInd, upInd, extInd,m_curr_trhfd,bytes2read, loc_offset_trFile, strerror(errno));
       m_currIndexOfTrHeadExtent = -1;
-      if(m_curr_trhfd != -1) ::close(m_curr_trhfd);
+      if (m_curr_trhfd != -1) ::close(m_curr_trhfd);
       m_curr_trhfd = -1;
       return JS_WARNING;
     }
@@ -1379,7 +1328,7 @@ int jsFileReader::readHeaderBuffer(long offset, char *buf, long buflen) {
 }
 
 int jsFileReader::getNumHeaderWords() const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
@@ -1389,7 +1338,7 @@ int jsFileReader::getNumHeaderWords() const {
 void jsFileReader::getHeaderWordsInfo(headerWordInfo *pInfo) const {
   int N = getNumHeaderWords();
   PropertyDescription property;
-  for(int i = 0; i < N; i++) {
+  for (int i = 0; i < N; i++) {
     m_traceProps->getTraceProperty(i, property);
     pInfo[i].format = property.getFormat();
     pInfo[i].count = property.getCount();
@@ -1424,7 +1373,7 @@ short jsFileReader::getShortHdrVal(std::string _name, char *headerBuf) {
 }
 
 int jsFileReader::getNumBytesInHeader() const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
@@ -1432,7 +1381,7 @@ int jsFileReader::getNumBytesInHeader() const {
 }
 
 long jsFileReader::getNumBytesInRawFrame() const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
@@ -1440,55 +1389,55 @@ long jsFileReader::getNumBytesInRawFrame() const {
 }
 
 int jsFileReader::getAxisLen(int index) const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
-  if(index >= 0 && index < getNDim()) return m_fileProps->axisLengths[index];
+  if (index >= 0 && index < getNDim()) return m_fileProps->axisLengths[index];
   return JS_USERERROR;
 }
 
 int jsFileReader::getAxisLogicalOrigin(int index) const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileWriterLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
-  if(index >= 0 && index < getNDim()) return m_fileProps->logicalOrigins[index];
+  if (index >= 0 && index < getNDim()) return m_fileProps->logicalOrigins[index];
   return JS_USERERROR;
 }
 
 int jsFileReader::getAxisLogicalDelta(int index) const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileWriterLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
-  if(index >= 0 && index < getNDim()) return m_fileProps->logicalDeltas[index];
+  if (index >= 0 && index < getNDim()) return m_fileProps->logicalDeltas[index];
   return JS_USERERROR;
 }
 
 double jsFileReader::getAxisPhysicalOrigin(int index) const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileWriterLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
-  if(index >= 0 && index < getNDim()) return m_fileProps->physicalOrigins[index];
+  if (index >= 0 && index < getNDim()) return m_fileProps->physicalOrigins[index];
   return JS_USERERROR;
 }
 
 double jsFileReader::getAxisPhysicalDelta(int index) const {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileWriterLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
-  if(index >= 0 && index < getNDim()) return m_fileProps->physicalDeltas[index];
+  if (index >= 0 && index < getNDim()) return m_fileProps->physicalDeltas[index];
   return JS_USERERROR;
 }
 
 catalogedHdrEntry jsFileReader::getAxisHdrEntry(int _axisInd) const {
-  if(_axisInd >= 0 && _axisInd < getNDim()) {
+  if (_axisInd >= 0 && _axisInd < getNDim()) {
     string label = (m_fileProps->axisLabels[_axisInd]).getName();
     catalogedHdrEntry entry = getHdrEntry(label);
-    if(entry.getName().empty() && AxisLabel::LABEL2HDR.count(label)) entry = getHdrEntry(AxisLabel::LABEL2HDR[label]);
+    if (entry.getName().empty() && AxisLabel::LABEL2HDR.count(label)) entry = getHdrEntry(AxisLabel::LABEL2HDR[label]);
     return entry;
   } else {
     ERROR_PRINTF(jsFileWriterLog, "Invalid axis index %d. Must be between 0 and %d", _axisInd, getNDim());
@@ -1502,17 +1451,17 @@ int jsFileReader::readTraceHeader(const int *_position, char *headbuf) {
 }
 
 int jsFileReader::readTraceHeader(const long _traceIndex, char *headbuf) {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
-  if(_traceIndex < 0 || _traceIndex >= m_TotalNumOfTraces) {
+  if (_traceIndex < 0 || _traceIndex >= m_TotalNumOfTraces) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid trace index. %ld must be in [0,%ld)\n", _traceIndex, m_TotalNumOfTraces);
     return JS_USERERROR;
   }
   long glb_offset = _traceIndex * m_headerLengthBytes;
-  int ires = readHeaderBuffer(glb_offset, (char*)&m_headerBufferArray[0], m_headerLengthBytes);
-  if(ires != JS_OK) return ires;
+  int ires = readHeaderBuffer(glb_offset, (char *)&m_headerBufferArray[0], m_headerLengthBytes);
+  if (ires != JS_OK) return ires;
   m_traceProps->getTraceHeader(0, 1, headbuf);
   return JS_OK;
 }
@@ -1524,22 +1473,22 @@ int jsFileReader::readFrameHeader(const int *_position, char *headbuf) {
 }
 
 int jsFileReader::readFrameHeader(const long _frameIndex, char *headbuf) {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return JS_USERERROR;
   }
-  if(_frameIndex < 0 || _frameIndex >= m_TotalNumOfFrames) {
+  if (_frameIndex < 0 || _frameIndex >= m_TotalNumOfFrames) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid frame index. %ld must be in [0,%ld)\n", _frameIndex, m_TotalNumOfFrames);
     return JS_USERERROR;
   }
 
   int numLiveTraces = getNumOfLiveTraces(_frameIndex);
-  if(!m_bSeisPEG_data) {
+  if (!m_bSeisPEG_data) {
     long glb_offset = _frameIndex * m_frameHeaderLength;
     long bytesInFrameHeader = numLiveTraces * m_headerLengthBytes;
 
-    int ires = readHeaderBuffer(glb_offset, (char*)&m_headerBufferArray[0], bytesInFrameHeader);
-    if(ires != JS_OK) return ires;
+    int ires = readHeaderBuffer(glb_offset, (char *)&m_headerBufferArray[0], bytesInFrameHeader);
+    if (ires != JS_OK) return ires;
     m_traceProps->getTraceHeader(0, numLiveTraces, headbuf);
 
   } else {
@@ -1547,46 +1496,42 @@ int jsFileReader::readFrameHeader(const long _frameIndex, char *headbuf) {
     long bytesInFrame = (long)numLiveTraces * (long)m_compess_traceSize;
 
     int ires = readTraceBuffer(glb_offset, &m_traceBufferArray[0], bytesInFrame);
-    if(ires != JS_OK) {
+    if (ires != JS_OK) {
       ERROR_PRINTF(jsFileReaderLog, "Can't read frame from the file");
       return ires;
     }
-    m_seispegCompressor->uncompressHdrs(m_traceBufferArray, bytesInFrame, (int*)m_headerBufferArray, m_headerLengthBytes);
+    m_seispegCompressor->uncompressHdrs(m_traceBufferArray, bytesInFrame, (int *)m_headerBufferArray, m_headerLengthBytes);
     m_traceProps->getTraceHeader(0, numLiveTraces, headbuf);
   }
   return numLiveTraces;
 }
 
-std::string jsFileReader::getTraceFormatName() const {
-  return m_fileProps->traceFormat.getName();
-}
+std::string jsFileReader::getTraceFormatName() const { return m_fileProps->traceFormat.getName(); }
 
-std::string jsFileReader::getDataType() const {
-  return m_fileProps->dataType.getName();
-}
+std::string jsFileReader::getDataType() const { return m_fileProps->dataType.getName(); }
 
 std::string jsFileReader::getByteOrderAsString() const {
-  if(m_byteOrder == JSIO_LITTLEENDIAN) {
+  if (m_byteOrder == JSIO_LITTLEENDIAN) {
     return "LittleEndian";
   }
   return "BigEndian";
 }
 
 int jsFileReader::readSingleProperty(const std::string &_datasetPath, const std::string &_fileName, const std::string _propertyName,
-    std::string &propertyValue) const {
+                                     std::string &propertyValue) const {
   std::string fpath = _datasetPath + _fileName;
   std::ifstream infile;
   infile.open(fpath.c_str(), std::ifstream::in);
 
   std::string line;
 
-  while(infile.good()) {
+  while (infile.good()) {
     std::getline(infile, line);
     ltrimStr(line);
-    if(line.substr(0, _propertyName.size()) == _propertyName) {
+    if (line.substr(0, _propertyName.size()) == _propertyName) {
       line = line.substr(_propertyName.size(), line.size());
       ltrimStr(line);
-      if(line[0] == '=') {
+      if (line[0] == '=') {
         propertyValue = line.substr(1, line.size());
         infile.close();
         return JS_OK;
@@ -1598,29 +1543,23 @@ int jsFileReader::readSingleProperty(const std::string &_datasetPath, const std:
   return JS_WARNING;
 }
 
-std::string jsFileReader::getVersion() const {
-  return m_fileProps->version;
-}
+std::string jsFileReader::getVersion() const { return m_fileProps->version; }
 
-catalogedHdrEntry jsFileReader::getHdrEntry(std::string _name) const {
-  return m_traceProps->getHdrEntry(_name);
-}
+catalogedHdrEntry jsFileReader::getHdrEntry(std::string _name) const { return m_traceProps->getHdrEntry(_name); }
 
-std::vector<catalogedHdrEntry> jsFileReader::getHdrEntries() const {
-  return m_traceProps->getHdrEntries();
-}
+std::vector<catalogedHdrEntry> jsFileReader::getHdrEntries() const { return m_traceProps->getHdrEntries(); }
 
 int jsFileReader::getHdrEntries(std::vector<std::string> &hdrEntries) const {
   int N = getNumHeaderWords();
   std::vector<jsIO::catalogedHdrEntry, std::allocator<jsIO::catalogedHdrEntry> > hdrs = m_traceProps->getHdrEntries();
-  for(int i = 0; i < N; i++) {
+  for (int i = 0; i < N; i++) {
     hdrEntries.push_back(hdrs[i].getName().c_str());
   }
   return N;
 }
 
 std::string jsFileReader::getCustomProperty(std::string _property) {
-  if(!m_bInit) {
+  if (!m_bInit) {
     ERROR_PRINTF(jsFileReaderLog, "Properties must be initialized first");
     return "";
   }
@@ -1628,7 +1567,7 @@ std::string jsFileReader::getCustomProperty(std::string _property) {
   std::ifstream ifile;
   std::string fname = m_filename + JS_FILE_PROPERTIES_XML;
   ifile.open(fname.c_str(), std::ifstream::in);
-  if(!ifile.good()) {
+  if (!ifile.good()) {
     ERROR_PRINTF(jsFileReaderLog, "Invalid JavaSeis Format. Error while opening file %s", fname.c_str());
     return "";
   }
@@ -1637,7 +1576,7 @@ std::string jsFileReader::getCustomProperty(std::string _property) {
   xmlreader xmlReader;
   xmlReader.parseFile(fname.c_str());
   xmlElement *pCustomPropsEl = xmlReader.getBlock("CustomProperties");
-  if(pCustomPropsEl == 0) {
+  if (pCustomPropsEl == 0) {
     ERROR_PRINTF(jsFileReaderLog, "There is no CustomProperties part.");
     return "";
   }
@@ -1645,42 +1584,41 @@ std::string jsFileReader::getCustomProperty(std::string _property) {
   std::vector<std::string> vProps;
 
   std::istringstream ss(_property);
-  while(!ss.eof()) {
+  while (!ss.eof()) {
     std::string x;
     std::getline(ss, x, '/');
     vProps.push_back(x);
   }
 
-  if(vProps.size() == 0) {
+  if (vProps.size() == 0) {
     ERROR_PRINTF(jsFileReaderLog, "Can't read %s from CustomProperties", _property.c_str());
     return "";
   }
 
   xmlElement *pEl = pCustomPropsEl;
-  for(int i = 0; i < vProps.size() - 1; i++) {
+  for (int i = 0; i < vProps.size() - 1; i++) {
     pEl = xmlReader.FirstChildBlock(pEl, vProps[i], true);
-    if(pEl == 0) {
+    if (pEl == 0) {
       return "";
     }
   }
 
   pEl = xmlReader.FirstChildElement(pEl, vProps[vProps.size() - 1], true);
-  if(pEl == 0) {
+  if (pEl == 0) {
     return "";
   }
   std::string sVal = xmlReader.getText(pEl);
 
-  sVal.erase(0, sVal.find_first_not_of(" \t")); //ltrim
-  sVal.erase(sVal.find_last_not_of(" \t") + 1, sVal.size()); //rtrim
+  sVal.erase(0, sVal.find_first_not_of(" \t"));               // ltrim
+  sVal.erase(sVal.find_last_not_of(" \t") + 1, sVal.size());  // rtrim
 
   return sVal;
 }
 
-int jsFileReader::getNumOfExtents() const {
-  return m_TrFileExtents->getNumExtents();
-}
+int jsFileReader::getNumOfExtents() const { return m_TrFileExtents->getNumExtents(); }
 
-int jsFileReader::getNumOfVirtualFolders() const {
-  return m_TrFileExtents->getNumvFolders();
-}
-}
+int jsFileReader::getNumOfVirtualFolders() const { return m_TrFileExtents->getNumvFolders(); }
+
+const std::vector<int> *jsFileReader::getTraceMap() const { return &trcMap; }
+
+}  // namespace jsIO

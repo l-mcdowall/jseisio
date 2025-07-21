@@ -4,6 +4,8 @@
 #ifndef WRAP_FILE_H
 #define WRAP_FILE_H
 
+#include <stdio.h>
+#include <sys/types.h>
 #include <cerrno>
 #include <cstddef>
 #include <type_traits>
@@ -20,6 +22,7 @@ ssize_t wrapIOFull(F f, int fd, const void *buf0, size_t nbytes, off_t offset) {
   char *buf = (char*)buf0;
   while(nbytes > 0) {
     if((ret = f(fd, buf, nbytes, offset)) == (ssize_t)-1) {
+      fprintf(stderr, "fd=%d, buf=%p, nbytes=%ld, offset=%ld\n", fd, buf, nbytes, offset);
       perror("wrapIOFull(): ");
       return ((ssize_t)-1);
     }

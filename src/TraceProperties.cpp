@@ -20,13 +20,14 @@
 
  ***************************************************************************/
 
-#include <unistd.h>
-#include "xmlreader.h"
-#include "PropertyDescription.h"
-
-#include "PSProLogging.h"
 #include "TraceProperties.h"
+
+#include <unistd.h>
+
 #include "Assertion.h"
+#include "PSProLogging.h"
+#include "PropertyDescription.h"
+#include "xmlreader.h"
 
 namespace jsIO {
 DECLARE_LOGGER(TracePropertiesLog);
@@ -38,17 +39,17 @@ const std::string TraceProperties::FORMAT = "format";
 const std::string TraceProperties::COUNT = "elementCount";
 const std::string TraceProperties::OFFSET = "byteOffset";
 
-std::vector<PropertyDescription> const& TraceProperties::defaultProperties() {
+std::vector<PropertyDescription> const &TraceProperties::defaultProperties() {
   static std::vector<PropertyDescription> const _(initDefaultProperties());
   return _;
 }
-std::vector<PropertyDescription> const& TraceProperties::knownProperties() {
+std::vector<PropertyDescription> const &TraceProperties::knownProperties() {
   static std::vector<PropertyDescription> const _(initKnownProperties());
   return _;
 }
 
 TraceProperties::~TraceProperties() {
-  if(!bset_buffer) delete buffer;
+  if (!bset_buffer) delete buffer;
 }
 
 TraceProperties::TraceProperties() {
@@ -72,12 +73,10 @@ void TraceProperties::CopyClass(const TraceProperties &Other) {
 
 TraceProperties::TraceProperties(TraceProperties const &_other) {
   buffer = new CharBuffer;
-  if(this != &_other) CopyClass(_other);
+  if (this != &_other) CopyClass(_other);
 }
 
-int TraceProperties::getNumProperties() {
-  return propList.size();
-}
+int TraceProperties::getNumProperties() { return propList.size(); }
 
 TraceProperties::TraceProperties(int _numProps, PropertyDescription *_traceProps) {
   traceIndex = 0;
@@ -88,7 +87,7 @@ TraceProperties::TraceProperties(int _numProps, PropertyDescription *_traceProps
 }
 
 int TraceProperties::Init(int _numProps, PropertyDescription *_traceProps) {
-  if(_numProps < 0) {
+  if (_numProps < 0) {
     ERROR_PRINTF(TracePropertiesLog, "Number of trace properties must be positive");
     return JS_USERERROR;
   }
@@ -97,14 +96,14 @@ int TraceProperties::Init(int _numProps, PropertyDescription *_traceProps) {
 
   recordLength = 0;
 
-  for(int i = 0; i < _numProps; i++) {
-    if(exists(_traceProps[i].getLabel())) continue;
+  for (int i = 0; i < _numProps; i++) {
+    if (exists(_traceProps[i].getLabel())) continue;
     propList.push_back(_traceProps[i]);
     keyMap.insert(std::pair<std::string, int>(_traceProps[i].getLabel(), _traceProps[i].getOffset()));
     recordLength += _traceProps[i].getRecordLength();
   }
 
-  if(buffer->size() < recordLength) buffer->resize(recordLength);
+  if (buffer->size() < recordLength) buffer->resize(recordLength);
 
   InitHdrEntries();
 
@@ -165,7 +164,7 @@ int TraceProperties::load(std::string &XMLstring) {
   xmlElement *parSetTraceProps = 0;
   parSetTraceProps = reader.getBlock("TraceProperties");
 
-  if(parSetTraceProps == 0) {
+  if (parSetTraceProps == 0) {
     ERROR_PRINTF(TracePropertiesLog, "There is no 'TraceProperties' part in XML string\n");
     return JS_USERERROR;
   }
@@ -175,12 +174,12 @@ int TraceProperties::load(std::string &XMLstring) {
   parSetEntries = reader.FirstChildBlock(parSetTraceProps);
   do {
     const char *str = reader.getAttribute(parSetEntries, "name");
-    if(strncmp(str, "entry_", 6) == 0) {
+    if (strncmp(str, "entry_", 6) == 0) {
       NEntries++;
     }
-  } while((parSetEntries = reader.NextSiblingElement(parSetEntries)));
+  } while ((parSetEntries = reader.NextSiblingElement(parSetEntries)));
 
-  if(NEntries == 0) {
+  if (NEntries == 0) {
     ERROR_PRINTF(TracePropertiesLog, "There is no 'entry' specified in XML string\n");
     return JS_USERERROR;
   }
@@ -196,29 +195,29 @@ int TraceProperties::load(std::string &XMLstring) {
   int count = 0, offset = 0;
   Parameter par;
   std::string curVal;
-  for(int i = 0; i < numProps; i++) {
+  for (int i = 0; i < numProps; i++) {
     const char *str = reader.getAttribute(parSetEntries, "name");
-    if(strncmp(str, ENTRY.c_str(), 5) == 0) {
+    if (strncmp(str, ENTRY.c_str(), 5) == 0) {
       parElement = reader.FirstChildElement(parSetEntries);
       do {
         int ires = reader.load2Parameter(parElement, &par);
-        if(ires != JS_OK) {
+        if (ires != JS_OK) {
           ERROR_PRINTF(TracePropertiesLog, "Error in XML string. Invalid header word description");
           return ires;
         }
         curVal = par.getName();
-        if(curVal == LABEL) {
+        if (curVal == LABEL) {
           par.valuesAsStrings(&label);
-        } else if(curVal == DESCRIPTION) {
+        } else if (curVal == DESCRIPTION) {
           par.valuesAsStrings(&description);
-        } else if(curVal == FORMAT) {
+        } else if (curVal == FORMAT) {
           par.valuesAsStrings(&sformat);
-        } else if(curVal == COUNT) {
+        } else if (curVal == COUNT) {
           par.valuesAsInts(&count);
-        } else if(curVal == OFFSET) {
+        } else if (curVal == OFFSET) {
           par.valuesAsInts(&offset);
         }
-      } while((parElement = reader.NextSiblingElement(parElement)));
+      } while ((parElement = reader.NextSiblingElement(parElement)));
     }
     traceProperty.set(label, description, sformat, count, offset);
     //   printf("read properties =%s,%s,%s,%d,%d\n",label.c_str(), description.c_str(), sformat.c_str(), count, offset);
@@ -230,7 +229,7 @@ int TraceProperties::load(std::string &XMLstring) {
   }
   //   printf("NEntries=%d\n",NEntries);
 
-  if(buffer->size() < recordLength) buffer->resize(recordLength);
+  if (buffer->size() < recordLength) buffer->resize(recordLength);
 
   InitHdrEntries();
 
@@ -242,12 +241,13 @@ int TraceProperties::save(std::string &XMLstring) {
   PropertyDescription traceProperty;
   XMLstring = "  <parset name=\"TraceProperties\">\n";
 
-  for(int i = 0; i < propList.size(); i++) {
+  for (int i = 0; i < propList.size(); i++) {
     XMLstring += "    <parset name=\"" + ENTRY + num2Str(i) + "\">\n";
     XMLstring += "      <par name=\"" + LABEL + "\" type=\"string\"> " + propList[i].getLabel() + " </par>\n";
-    if(propList[i].getDescription().c_str()[0] == '"') XMLstring += "      <par name=\"" + DESCRIPTION + "\" type=\"string\"> "
-        + propList[i].getDescription() + " </par>\n";
-    else XMLstring += "      <par name=\"" + DESCRIPTION + "\" type=\"string\"> \"" + propList[i].getDescription() + "\" </par>\n";
+    if (propList[i].getDescription().c_str()[0] == '"')
+      XMLstring += "      <par name=\"" + DESCRIPTION + "\" type=\"string\"> " + propList[i].getDescription() + " </par>\n";
+    else
+      XMLstring += "      <par name=\"" + DESCRIPTION + "\" type=\"string\"> \"" + propList[i].getDescription() + "\" </par>\n";
     XMLstring += "      <par name=\"" + FORMAT + "\" type=\"string\"> " + propList[i].getFormatString() + " </par>\n";
     XMLstring += "      <par name=\"" + COUNT + "\" type=\"int\"> " + num2Str(propList[i].getCount()) + " </par>\n";
     XMLstring += "      <par name=\"" + OFFSET + "\" type=\"int\"> " + num2Str(propList[i].getOffset()) + " </par>\n";
@@ -266,8 +266,8 @@ int TraceProperties::save(std::string &XMLstring) {
  */
 
 bool TraceProperties::getTraceProperty(std::string key, PropertyDescription &property) {
-  for(int i = 0; i < propList.size(); i++) {
-    if(propList[i].getLabel() == key) {
+  for (int i = 0; i < propList.size(); i++) {
+    if (propList[i].getLabel() == key) {
       property = propList[i];
       return true;
     }
@@ -276,7 +276,7 @@ bool TraceProperties::getTraceProperty(std::string key, PropertyDescription &pro
 }
 
 bool TraceProperties::getTraceProperty(int index, PropertyDescription &property) {
-  if(index >= 0 && index < propList.size()) {
+  if (index >= 0 && index < propList.size()) {
     property = propList[index];
     return true;
   }
@@ -294,9 +294,7 @@ void TraceProperties::setBufferPosition(std::string key) {
   buffer->position(buffer_pos);
 }
 
-int TraceProperties::getKeyOffset(std::string key) {
-  return keyMap.find(key)->second;
-}
+int TraceProperties::getKeyOffset(std::string key) { return keyMap.find(key)->second; }
 
 //
 //    public CharBuffer getBuffer() {
@@ -325,16 +323,16 @@ int TraceProperties::getKeyOffset(std::string key) {
  */
 bool TraceProperties::exists(std::string key) {
   int i;
-  for(i = 0; i < propList.size(); i++) {
-    if(propList[i].getLabel() == key) break;
+  for (i = 0; i < propList.size(); i++) {
+    if (propList[i].getLabel() == key) break;
   }
   return (i != propList.size());
 }
 
-//to check whether a property exist in defaultProperties or knownProperties
+// to check whether a property exist in defaultProperties or knownProperties
 int TraceProperties::exists(std::string key, std::vector<PropertyDescription> const &_propList) {
-  for(int i = 0; i < _propList.size(); i++) {
-    if(_propList[i].getLabel() == key) return i;
+  for (int i = 0; i < _propList.size(); i++) {
+    if (_propList[i].getLabel() == key) return i;
   }
   return -1;
 }
@@ -345,9 +343,9 @@ int TraceProperties::exists(std::string key, std::vector<PropertyDescription> co
  */
 void TraceProperties::getTraceProperties(PropertyDescription *&traceProps) {
   int count = getNumProperties();
-  if(count > 0) {
+  if (count > 0) {
     traceProps = new PropertyDescription[count];
-    for(int i = 0; i < count; i++) {
+    for (int i = 0; i < count; i++) {
       traceProps[i] = propList[i];
     }
   }
@@ -413,7 +411,7 @@ void TraceProperties::putShortArray(std::string key, short values[]) {
   getTraceProperty(key, property);
   setBufferPosition(key);
   int count = property.getCount();
-  for(int i = 0; i < count; i++) {
+  for (int i = 0; i < count; i++) {
     buffer->putShort(values[i]);
   }
 }
@@ -423,7 +421,7 @@ void TraceProperties::getShortArray(std::string key, short values[]) {
   getTraceProperty(key, property);
   setBufferPosition(key);
   int count = property.getCount();
-  for(int i = 0; i < count; i++) {
+  for (int i = 0; i < count; i++) {
     values[i] = buffer->getShort();
   }
 }
@@ -433,7 +431,7 @@ void TraceProperties::putIntArray(std::string key, int values[]) {
   getTraceProperty(key, property);
   setBufferPosition(key);
   int count = property.getCount();
-  for(int i = 0; i < count; i++) {
+  for (int i = 0; i < count; i++) {
     buffer->putInt(values[i]);
   }
 }
@@ -443,7 +441,7 @@ void TraceProperties::getIntArray(std::string key, int values[]) {
   getTraceProperty(key, property);
   setBufferPosition(key);
   int count = property.getCount();
-  for(int i = 0; i < count; i++) {
+  for (int i = 0; i < count; i++) {
     values[i] = buffer->getInt();
   }
 }
@@ -453,7 +451,7 @@ void TraceProperties::putLongArray(std::string key, long values[]) {
   getTraceProperty(key, property);
   setBufferPosition(key);
   int count = property.getCount();
-  for(int i = 0; i < count; i++) {
+  for (int i = 0; i < count; i++) {
     buffer->putLong(values[i]);
   }
 }
@@ -463,7 +461,7 @@ void TraceProperties::getLongArray(std::string key, long values[]) {
   getTraceProperty(key, property);
   setBufferPosition(key);
   int count = property.getCount();
-  for(int i = 0; i < count; i++) {
+  for (int i = 0; i < count; i++) {
     values[i] = buffer->getLong();
   }
 }
@@ -473,7 +471,7 @@ void TraceProperties::putDoubleArray(std::string key, double values[]) {
   getTraceProperty(key, property);
   setBufferPosition(key);
   int count = property.getCount();
-  for(int i = 0; i < count; i++) {
+  for (int i = 0; i < count; i++) {
     buffer->putDouble(values[i]);
   }
 }
@@ -483,7 +481,7 @@ void TraceProperties::getDoubleArray(std::string key, double values[]) {
   getTraceProperty(key, property);
   setBufferPosition(key);
   int count = property.getCount();
-  for(int i = 0; i < count; i++) {
+  for (int i = 0; i < count; i++) {
     values[i] = buffer->getDouble();
   }
 }
@@ -493,7 +491,7 @@ void TraceProperties::putFloatArray(std::string key, float values[]) {
   getTraceProperty(key, property);
   setBufferPosition(key);
   int count = property.getCount();
-  for(int i = 0; i < count; i++) {
+  for (int i = 0; i < count; i++) {
     buffer->putFloat(values[i]);
   }
 }
@@ -503,39 +501,41 @@ void TraceProperties::getFloatArray(std::string key, float values[]) {
   getTraceProperty(key, property);
   setBufferPosition(key);
   int count = property.getCount();
-  for(int i = 0; i < count; i++) {
+  for (int i = 0; i < count; i++) {
     values[i] = buffer->getFloat();
   }
 }
 
 int TraceProperties::saveTraceHeader(std::string filename, int firstTrace, int numOfTraces, const bool append) {
   int NTraces = (int)buffer->size() / recordLength;
-  if(firstTrace < 0 || numOfTraces < 0 || firstTrace + numOfTraces > NTraces) {
+  if (firstTrace < 0 || numOfTraces < 0 || firstTrace + numOfTraces > NTraces) {
     ERROR_PRINTF(TracePropertiesLog, "Error: illegal parameeters. It must be %d >=0 , %d>0 and %d+%d<=%d.", firstTrace, numOfTraces,
                  firstTrace, numOfTraces, NTraces);
     return JS_USERERROR;
   }
 
   std::string mode;
-  if(!append) mode = "wb";
-  else mode = "ab+";
+  if (!append)
+    mode = "wb";
+  else
+    mode = "ab+";
 
   FILE *pFile = fopen(filename.c_str(), mode.c_str());
-  if(pFile == NULL) {
+  if (pFile == NULL) {
     ERROR_PRINTF(TracePropertiesLog, "Error: Can't open file %s.\n", filename.c_str());
     return JS_USERERROR;
   }
   const char *arr = buffer->array();
-  if(nativeOrder() != buffer->getByteOrder()) {  //swap endianness
+  if (nativeOrder() != buffer->getByteOrder()) {  // swap endianness
     char *tmpbuf = new char[numOfTraces * recordLength];
     memcpy(tmpbuf, &arr[firstTrace * recordLength], numOfTraces * recordLength);
     int hw_count = getNumProperties();
-    for(int i = 0; i < numOfTraces; i++) {
-      for(int j = 0; j < hw_count; j++) {
+    for (int i = 0; i < numOfTraces; i++) {
+      for (int j = 0; j < hw_count; j++) {
         int hcount = propList[j].getCount();
         int hoffset = propList[j].getOffset();
         int hformatLen = propList[j].getFormatLength();
-        endian_swap((void*)&tmpbuf[i * recordLength + hoffset], hcount, hformatLen);
+        endian_swap((void *)&tmpbuf[i * recordLength + hoffset], hcount, hformatLen);
       }
     }
     fwrite(tmpbuf, recordLength, numOfTraces, pFile);
@@ -552,27 +552,27 @@ int TraceProperties::saveTraceHeader(std::string filename, int firstTrace, int n
 
 int TraceProperties::saveTraceHeader(FILE *pFile, int firstTrace, int numOfTraces) {
   int NTraces = (int)buffer->size() / recordLength;
-  if(firstTrace < 0 || numOfTraces < 0 || firstTrace + numOfTraces > NTraces) {
+  if (firstTrace < 0 || numOfTraces < 0 || firstTrace + numOfTraces > NTraces) {
     ERROR_PRINTF(TracePropertiesLog, "Error: illegal parameeters. It must be %d >=0 , %d>0 and %d+%d<=%d.", firstTrace, numOfTraces,
                  firstTrace, numOfTraces, NTraces);
     return JS_USERERROR;
   }
 
-  if(pFile == NULL || ferror(pFile)) {
+  if (pFile == NULL || ferror(pFile)) {
     ERROR_PRINTF(TracePropertiesLog, "Invalid file pointer\n");
     return JS_USERERROR;
   }
   const char *arr = buffer->array();
-  if(nativeOrder() != buffer->getByteOrder()) {  //swap endianness
+  if (nativeOrder() != buffer->getByteOrder()) {  // swap endianness
     char *tmpbuf = new char[numOfTraces * recordLength];
     memcpy(tmpbuf, &arr[firstTrace * recordLength], numOfTraces * recordLength);
     int hw_count = getNumProperties();
-    for(int i = 0; i < numOfTraces; i++) {
-      for(int j = 0; j < hw_count; j++) {
+    for (int i = 0; i < numOfTraces; i++) {
+      for (int j = 0; j < hw_count; j++) {
         int hcount = propList[j].getCount();
         int hoffset = propList[j].getOffset();
         int hformatLen = propList[j].getFormatLength();
-        endian_swap((void*)&tmpbuf[i * recordLength + hoffset], hcount, hformatLen);
+        endian_swap((void *)&tmpbuf[i * recordLength + hoffset], hcount, hformatLen);
       }
     }
     fwrite(tmpbuf, recordLength, numOfTraces, pFile);
@@ -589,35 +589,35 @@ int TraceProperties::saveTraceHeader(FILE *pFile, int firstTrace, int numOfTrace
 void TraceProperties::getTraceHeader(long firstTrace, long numOfTraces, char *headbuf) {
   const char *buf = buffer->array();
   memcpy(headbuf, &buf[recordLength * firstTrace], numOfTraces * recordLength);
-  if(nativeOrder() != buffer->getByteOrder()) {
+  if (nativeOrder() != buffer->getByteOrder()) {
     int hw_count = getNumProperties();
-    for(int i = 0; i < numOfTraces; i++) {
-      for(int j = 0; j < hw_count; j++) {
+    for (int i = 0; i < numOfTraces; i++) {
+      for (int j = 0; j < hw_count; j++) {
         int hcount = propList[j].getCount();
         int hoffset = propList[j].getOffset();
         int hformatLen = propList[j].getFormatLength();
-        endian_swap((void*)&headbuf[i * recordLength + hoffset], hcount, hformatLen);
+        endian_swap((void *)&headbuf[i * recordLength + hoffset], hcount, hformatLen);
       }
     }
   }
 }
 
-//swap endiannes of #numOfTraces traces in headbuf
+// swap endiannes of #numOfTraces traces in headbuf
 void TraceProperties::swapHeaders(char *headbuf, int numOfTraces) {
   int hw_count = getNumProperties();
-  for(int i = 0; i < numOfTraces; i++) {
-    for(int j = 0; j < hw_count; j++) {
+  for (int i = 0; i < numOfTraces; i++) {
+    for (int j = 0; j < hw_count; j++) {
       int hcount = propList[j].getCount();
       int hoffset = propList[j].getOffset();
       int hformatLen = propList[j].getFormatLength();
-      endian_swap((void*)&headbuf[i * recordLength + hoffset], hcount, hformatLen);
+      endian_swap((void *)&headbuf[i * recordLength + hoffset], hcount, hformatLen);
     }
   }
 }
 
 void TraceProperties::double2ints(double fx, int &ix, int &scalco) {
   int isign = 1;
-  if(fx < 0) {
+  if (fx < 0) {
     isign = -1;
     fx = -fx;
   }
@@ -625,7 +625,7 @@ void TraceProperties::double2ints(double fx, int &ix, int &scalco) {
   double d = fx - ix;
   int m;
   scalco = 1;
-  while(ix < INT_MAX && d > 1e-7) {
+  while (ix < INT_MAX && d > 1e-7) {
     d *= 10.;
     m = (int)(d + 1e-8);
     d -= m;
@@ -636,18 +636,16 @@ void TraceProperties::double2ints(double fx, int &ix, int &scalco) {
   ix = isign * ix;
 }
 
-void TraceProperties::copyToBufer(char *_headBuf, int numTraces) {
-  buffer->insert(0, _headBuf, numTraces * recordLength);
-}
+void TraceProperties::copyToBufer(char *_headBuf, int numTraces) { buffer->insert(0, _headBuf, numTraces * recordLength); }
 
 int TraceProperties::addProperty(std::string _label) {
-  if(exists(_label)) {
+  if (exists(_label)) {
     TRACE_PRINTF(TracePropertiesLog, "A property named %s already exist in the property list", _label.c_str());
     return JS_WARNING;
   }
 
   int ind = exists(_label, knownProperties());
-  if(ind == -1) {
+  if (ind == -1) {
     ERROR_PRINTF(TracePropertiesLog, "A property named %s is unknown", _label.c_str());
     return JS_USERERROR;
   }
@@ -665,7 +663,7 @@ int TraceProperties::addProperty(std::string _label) {
   cHdrEntry.setByteOrder(buffer->getByteOrder());
   hdrEntries.push_back(cHdrEntry);
 
-  if(buffer->size() < recordLength) buffer->resize(recordLength);
+  if (buffer->size() < recordLength) buffer->resize(recordLength);
 
   return JS_OK;
 }
@@ -676,7 +674,7 @@ int TraceProperties::addProperty(std::string _label, std::string _description, s
 }
 
 int TraceProperties::addProperty(std::string _label, std::string _description, int _format, int _count) {
-  if(exists(_label)) {
+  if (exists(_label)) {
     TRACE_PRINTF(TracePropertiesLog, "A property named %s already exist in the property list", _label.c_str());
     return JS_WARNING;
   }
@@ -693,7 +691,7 @@ int TraceProperties::addProperty(std::string _label, std::string _description, i
   cHdrEntry.setByteOrder(buffer->getByteOrder());
   hdrEntries.push_back(cHdrEntry);
 
-  if(buffer->size() < recordLength) buffer->resize(recordLength);
+  if (buffer->size() < recordLength) buffer->resize(recordLength);
 
   return JS_OK;
 }
@@ -703,7 +701,7 @@ int TraceProperties::InitHdrEntries() {
   hdrEntries.clear();
   hdrEntries.resize(N);
 
-  for(int i = 0; i < N; i++) {
+  for (int i = 0; i < N; i++) {
     hdrEntries[i].Init(propList[i].getLabel(), propList[i].getDescription(), propList[i].getFormat(), propList[i].getCount(),
                        propList[i].getOffset());
     hdrEntries[i].setByteOrder(buffer->getByteOrder());
@@ -715,8 +713,8 @@ int TraceProperties::InitHdrEntries() {
 catalogedHdrEntry TraceProperties::getHdrEntry(std::string _name, bool must_exist) {
   int N = hdrEntries.size();
 
-  for(int i = 0; i < N; i++) {
-    if(hdrEntries[i].getName() == _name) return hdrEntries[i];
+  for (int i = 0; i < N; i++) {
+    if (hdrEntries[i].getName() == _name) return hdrEntries[i];
   }
 
   assertion(!must_exist, "There is no header named %s", _name.c_str());
@@ -724,7 +722,7 @@ catalogedHdrEntry TraceProperties::getHdrEntry(std::string _name, bool must_exis
 }
 
 void TraceProperties::addDefaultProperties() {
-  for(int i = 0; i < defaultProperties().size(); i++) {
+  for (int i = 0; i < defaultProperties().size(); i++) {
     addProperty(defaultProperties()[i].getLabel());
   }
 }
@@ -816,6 +814,7 @@ std::vector<PropertyDescription> TraceProperties::initDefaultProperties() {
       PropertyDescription(JS_HEADER_NAMES[JSHDR_TFULL_S], JS_HEADER_DESC[JSHDR_TFULL_S], JS_HEADER_TYPES_INT[JSHDR_TFULL_S], 1));
   props.push_back(
       PropertyDescription(JS_HEADER_NAMES[JSHDR_TLIVE_S], JS_HEADER_DESC[JSHDR_TLIVE_S], JS_HEADER_TYPES_INT[JSHDR_TLIVE_S], 1));
+#if 0
   props.push_back(
       PropertyDescription(JS_HEADER_NAMES[JSHDR_LEN_SURG], JS_HEADER_DESC[JSHDR_LEN_SURG], JS_HEADER_TYPES_INT[JSHDR_LEN_SURG], 1));
   props.push_back(
@@ -825,9 +824,10 @@ std::vector<PropertyDescription> TraceProperties::initDefaultProperties() {
   props.push_back(
       PropertyDescription(JS_HEADER_NAMES[JSHDR_AMP_NORM], JS_HEADER_DESC[JSHDR_AMP_NORM], JS_HEADER_TYPES_INT[JSHDR_AMP_NORM], 1));
   props.push_back(
-      PropertyDescription(JS_HEADER_NAMES[JSHDR_TR_FOLD], JS_HEADER_DESC[JSHDR_TR_FOLD], JS_HEADER_TYPES_INT[JSHDR_TR_FOLD], 1));
-  props.push_back(
       PropertyDescription(JS_HEADER_NAMES[JSHDR_SKEWSTAT], JS_HEADER_DESC[JSHDR_SKEWSTAT], JS_HEADER_TYPES_INT[JSHDR_SKEWSTAT], 1));
+#endif
+  props.push_back(
+      PropertyDescription(JS_HEADER_NAMES[JSHDR_TR_FOLD], JS_HEADER_DESC[JSHDR_TR_FOLD], JS_HEADER_TYPES_INT[JSHDR_TR_FOLD], 1));
   props.push_back(
       PropertyDescription(JS_HEADER_NAMES[JSHDR_PAD_TRC], JS_HEADER_DESC[JSHDR_PAD_TRC], JS_HEADER_TYPES_INT[JSHDR_PAD_TRC], 1));
   props.push_back(
@@ -835,5 +835,4 @@ std::vector<PropertyDescription> TraceProperties::initDefaultProperties() {
 
   return props;
 }
-}
-
+}  // namespace jsIO
